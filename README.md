@@ -1,0 +1,133 @@
+# bluesilk
+
+A fast, minimal AI agent for individuals and trusted small teams. bluesilk runs on DeepSeek and is available through private Telegram chats, a built-in web console, or both.
+
+The core application is a single Python file with no required third-party runtime dependencies.
+
+## Features
+
+- Separate conversations and work queues for each team member
+- Shared memory, reusable skills, custom tools, and conversation history
+- Built-in shell access, file transfer, image understanding, and background jobs
+- Optional Chromium control through screenshots and mouse/keyboard actions
+- Local and remote MCP server support
+- Automatic context compaction and periodic memory maintenance
+
+## Requirements
+
+- Python 3.10 or newer on a POSIX system
+- A [DeepSeek API key](https://platform.deepseek.com/api_keys)
+- Optional: a Telegram bot token and member user IDs
+- Optional: Playwright and Chromium for browser control
+
+## Installation
+
+Using `uv`:
+
+```sh
+uv tool install bluesilk
+```
+
+Or using `pipx`:
+
+```sh
+pipx install bluesilk
+```
+
+Start the agent and follow the interactive setup:
+
+```sh
+bluesilk
+```
+
+You can run setup again from the terminal or browser:
+
+```sh
+bluesilk setup
+bluesilk setup web
+```
+
+The setup requires at least one Telegram member or web-console member. Configuration and persistent data are stored in `~/.bluesilk/` by default. Set `BLUESILK_HOME` to use another directory.
+
+## Interfaces
+
+### Telegram
+
+Create a bot with `@BotFather`. Before setup, each member must start the bot and provide their numeric Telegram user ID. Messages from unconfigured users and non-private chats are ignored.
+
+### Web console
+
+The web console listens on `http://127.0.0.1:8321/` by default and creates a private login link for each member.
+
+- `Esc` stops the current response.
+- `Ctrl+U`, paste, or drag and drop sends a file.
+- `/new` starts a new personal conversation.
+- `/reset` resets shared agent data and creates a backup.
+- `/settings` opens configuration.
+- `/theme` switches the color theme.
+
+The console uses plain HTTP. Keep it on localhost or a trusted private network, or place it behind a TLS reverse proxy.
+
+## Browser control
+
+Install the optional browser support and Chromium:
+
+```sh
+uv tool install 'bluesilk[browser]'
+bluesilk browser install
+```
+
+This adds a visual `computer` tool. Each member gets an isolated browser context with separate cookies, tabs, and downloads. Headless mode is enabled by default; browser visibility, cursor display, and action delay can be changed in `/settings`.
+
+## MCP servers
+
+Configure local stdio or remote Streamable HTTP servers in `~/.bluesilk/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "local": {
+      "command": "uv",
+      "args": ["run", "/path/to/server.py"]
+    },
+    "remote": {
+      "url": "https://example.com/mcp",
+      "token": "bearer-token"
+    }
+  }
+}
+```
+
+MCP tools are exposed as `<server>__<tool>`. bluesilk does not perform MCP OAuth, so provide credentials accepted by the server.
+
+## Data and security
+
+All state is stored as plain files under `~/.bluesilk/`, including credentials, conversations, memory, uploaded files, and job output.
+
+bluesilk gives the agent unrestricted shell access as the account running it. Treat every configured member as fully trusted and run it under a dedicated operating-system account, VM, or isolated machine when possible.
+
+## Development
+
+Run the offline test suite:
+
+```sh
+python -m unittest discover -s tests -v
+```
+
+Install the browser extra and run the suite with real Chromium integration tests:
+
+```sh
+uv sync --extra browser
+uv run playwright install chromium
+uv run python -m unittest discover -s tests -v
+```
+
+Build the package from the repository root:
+
+```sh
+uv build
+```
+
+## License
+
+[MIT](LICENSE)
