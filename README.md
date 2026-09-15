@@ -19,6 +19,7 @@ The core application is a single Python file with no required third-party runtim
 - A [DeepSeek API key](https://platform.deepseek.com/api_keys)
 - Optional: a Telegram bot token and member user IDs
 - Optional: Playwright and Chromium for browser control
+- Optional: `xdotool` and `scrot` (or `ffmpeg`) on an X11 desktop for desktop control
 
 ## Installation
 
@@ -78,6 +79,16 @@ bluesilk browser install
 ```
 
 This adds a visual `computer` tool. Each member gets an isolated browser context with separate cookies, tabs, and downloads. Headless mode is enabled by default; browser visibility, cursor display, and action delay can be changed in `/settings`.
+
+## Desktop control
+
+On an X11 session with `xdotool` and `scrot` (or `ffmpeg`) installed, bluesilk also gets a `desktop` tool that acts on the real screen from screenshots:
+
+```sh
+sudo apt install xdotool scrot
+```
+
+The screen is one physical desktop shared by the whole team, so actions are serialised and the agent is told to look before it acts. Set `"desktop": {"enabled": false}` in the config to turn it off. Wayland is not supported.
 
 ## MCP servers
 

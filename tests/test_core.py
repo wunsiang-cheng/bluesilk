@@ -80,7 +80,7 @@ class StorageTests(BluesilkTestCase):
         self.assertEqual(saved["summary"], "summary")
         self.assertEqual(saved["messages"][0]["content"][1], {
             "type": "text",
-            "text": "[browser screenshot omitted; use computer observe for a current view]",
+            "text": "[screenshot omitted; use observe for a current view]",
         })
         self.assertIn("base64,secret", session.messages[0]["content"][1]["image_url"]["url"])
 
