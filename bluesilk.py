@@ -1164,7 +1164,7 @@ function next(){  // typewriter: the text nodes are emptied, then refilled a few
  const it=tq.shift();if(!it)return typing=false;typing=true;
  const d=line(...it),w=document.createTreeWalker(d,NodeFilter.SHOW_TEXT),nodes=[];let n,total=0,i=0;
  while(n=w.nextNode()){nodes.push([n,n.data]);total+=n.data.length;n.data=''}
- const step=Math.max(2,total/150);
+ const step=Math.max(2,Math.ceil(total/150));  // integer: a fractional step makes substr/i drift and skip chars
  (function tick(){let b=step;while(b>0&&nodes.length){const[nd,s]=nodes[0],k=Math.min(b,s.length-i);nd.data+=s.substr(i,k);i+=k;b-=k;if(i>=s.length){nodes.shift();i=0}}
   out.scrollTop=out.scrollHeight;nodes.length?requestAnimationFrame(tick):next()})();
 }
