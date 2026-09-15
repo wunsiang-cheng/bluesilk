@@ -16,7 +16,7 @@ class UtilityTests(BluesilkTestCase):
     def test_clip_keeps_head_and_tail(self):
         self.bs.CLIP = 4
         result = self.bs.clip("abcdefghijkl")
-        self.assertTrue(result.startswith("abcd\n\n[... 4 chars omitted ...]"))
+        self.assertTrue(result.startswith("abcd\n\n[... 4 chars omitted;"))
         self.assertTrue(result.endswith("ijkl"))
 
     def test_quiet_returns_value_and_swallows_exception(self):
