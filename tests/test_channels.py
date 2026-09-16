@@ -8,15 +8,17 @@ from tests.support import BluesilkTestCase
 
 class SettingsTests(BluesilkTestCase):
     def test_apply_settings_creates_web_members_and_private_config(self):
-        with mock.patch.object(self.bs, "check_key"):
+        with mock.patch.object(self.bs, "check_key"), mock.patch.object(self.bs, "check_model", return_value=(1_048_576, True)):
             result = self.bs.apply_settings({
-                "api_key": "deepseek-key",
+                "api_key": "openrouter-key",
                 "user_ids": "",
                 "members": "alice, bob",
                 "host": "127.0.0.1",
                 "port": "9000",
             })
-        self.assertEqual(result["api_key"], "deepseek-key")
+        self.assertEqual(result["api_key"], "openrouter-key")
+        self.assertEqual(result["model"], self.bs.MODEL)  # blank model: the default
+        self.assertEqual((result["compact_at"], result["vision"]), (524_288, True))
         self.assertEqual(set(result["web"]["tokens"].values()), {"alice", "bob"})
         self.assertEqual(result["web"]["port"], 9000)
         self.assertEqual(self.bs.CONFIG.stat().st_mode & 0o777, 0o600)
@@ -26,13 +28,13 @@ class SettingsTests(BluesilkTestCase):
             "api_key": "old-key",
             "web": {"host": "127.0.0.1", "port": 8321, "tokens": {"existing": "alice"}},
         })
-        with mock.patch.object(self.bs, "check_key"):
+        with mock.patch.object(self.bs, "check_key"), mock.patch.object(self.bs, "check_model", return_value=(1_048_576, True)):
             result = self.bs.apply_settings({"api_key": "", "user_ids": "", "members": "alice carol"})
         self.assertEqual(result["api_key"], "old-key")
         self.assertEqual(next(token for token, name in result["web"]["tokens"].items() if name == "alice"), "existing")
 
     def test_apply_settings_validates_required_channel_and_browser_delay(self):
-        with mock.patch.object(self.bs, "check_key"):
+        with mock.patch.object(self.bs, "check_key"), mock.patch.object(self.bs, "check_model", return_value=(1_048_576, True)):
             with self.assertRaisesRegex(ValueError, "Telegram members, web console members"):
                 self.bs.apply_settings({"api_key": "key", "user_ids": "", "members": ""})
             with self.assertRaisesRegex(ValueError, "0 to 2000"):
@@ -42,18 +44,62 @@ class SettingsTests(BluesilkTestCase):
 
     def test_apply_settings_writes_and_removes_mcp_config(self):
         form = {"api_key": "key", "user_ids": "", "members": "alice", "mcp": '{"mcpServers": {}}'}
-        with mock.patch.object(self.bs, "check_key"):
+        with mock.patch.object(self.bs, "check_key"), mock.patch.object(self.bs, "check_model", return_value=(1_048_576, True)):
             self.bs.apply_settings(form)
             self.assertEqual(json.loads(self.bs.MCP.read_text()), {"mcpServers": {}})
             form["mcp"] = ""
             self.bs.apply_settings(form)
         self.assertFalse(self.bs.MCP.exists())
 
+    def test_apply_settings_stores_the_chosen_model_and_its_limits(self):
+        with mock.patch.object(self.bs, "check_key"), \
+             mock.patch.object(self.bs, "check_model", return_value=(200_000, False)) as check_model:
+            result = self.bs.apply_settings({"api_key": "key", "model": " vendor/text-only ", "user_ids": "", "members": "alice"})
+        check_model.assert_called_once_with("vendor/text-only")
+        self.assertEqual(result["model"], "vendor/text-only")
+        self.assertEqual((result["compact_at"], result["vision"]), (100_000, False))
+
     def test_settings_view_masks_secrets(self):
-        self.bs.CFG.update({"api_key": "abcdefgh", "bot_token": "12345678", "user_ids": [7]})
+        self.bs.CFG.update({"api_key": "abcdefgh", "bot_token": "12345678", "user_ids": [7], "model": "vendor/m"})
         view = self.bs.settings_view()
         self.assertEqual(view["api_key"], "abc…efgh")
         self.assertEqual(view["bot_token"], "123…5678")
+        self.assertEqual((view["model"], view["default_model"]), ("vendor/m", self.bs.MODEL))
+
+
+class OpenRouterTests(BluesilkTestCase):
+    MODELS = {"data": [
+        {"id": "vendor/vision", "context_length": 1_000_000, "supported_parameters": ["tools", "temperature"],
+         "architecture": {"input_modalities": ["text", "image"]}},
+        {"id": "vendor/text", "context_length": 128_000, "supported_parameters": ["tools"],
+         "architecture": {"input_modalities": ["text"]}},
+        {"id": "vendor/chat", "context_length": 8_192, "supported_parameters": ["temperature"],
+         "architecture": {"input_modalities": ["text"]}},
+    ]}
+
+    def test_check_key_asks_the_key_endpoint(self):
+        with mock.patch.object(self.bs, "http", return_value={"data": {}}) as http:
+            self.bs.check_key("sk-or-x")
+        self.assertEqual(http.call_args.args, (f"{self.bs.API}/key",))
+        self.assertEqual(http.call_args.kwargs["headers"]["Authorization"], "Bearer sk-or-x")
+
+    def test_check_model_reports_context_and_vision(self):
+        with mock.patch.object(self.bs, "http", return_value=self.MODELS):
+            self.assertEqual(self.bs.check_model("vendor/vision"), (1_000_000, True))
+            self.assertEqual(self.bs.check_model("vendor/text"), (128_000, False))
+            with self.assertRaisesRegex(ValueError, "no such model"):
+                self.bs.check_model("vendor/missing")
+            with self.assertRaisesRegex(ValueError, "tool calling"):
+                self.bs.check_model("vendor/chat")
+
+    def test_text_only_model_gets_paths_instead_of_images(self):
+        path = self.home / "photo"
+        path.write_bytes(b"\x89PNGrest")
+        self.bs.CFG["vision"] = False
+        self.assertIsNone(self.bs.as_image(path))
+        self.assertEqual(self.bs.incoming({"local": [path], "text": "look"}), f"[file saved: {path}]\nlook")
+        self.bs.CFG["vision"] = True
+        self.assertEqual(self.bs.incoming({"local": [path], "text": "look"})[1]["type"], "image_url")
 
 
 class TelegramTests(BluesilkTestCase):

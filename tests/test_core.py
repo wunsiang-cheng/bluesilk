@@ -89,7 +89,8 @@ class StorageTests(BluesilkTestCase):
         messages = []
         msg = {
             "role": "user",
-            "reasoning_content": "private",
+            "reasoning": "private",
+            "reasoning_details": [{"type": "reasoning.text", "text": "private"}],
             "content": [
                 {"type": "text", "text": "uploaded"},
                 {"type": "image_url", "image_url": {"url": "data:image/png;base64,abc"}},
@@ -97,7 +98,8 @@ class StorageTests(BluesilkTestCase):
         }
         self.bs.add(session, messages, msg)
         entry = json.loads(self.bs.HISTORY.read_text())
-        self.assertNotIn("reasoning_content", entry)
+        self.assertNotIn("reasoning", entry)
+        self.assertNotIn("reasoning_details", entry)
         self.assertEqual(entry["content"], "uploaded\n[image]")
         self.assertIs(messages[0], msg)
 

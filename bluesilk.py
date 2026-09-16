@@ -1,4 +1,4 @@
-"""bluesilk: a fast, minimal AI agent for you or a small team. DeepSeek + Telegram or a web console."""
+"""bluesilk: a fast, minimal AI agent for you or a small team. OpenRouter + Telegram or a web console."""
 import atexit, base64, datetime, getpass, hmac, importlib.util, itertools, json, mimetypes, os, platform, queue, re, secrets, shutil, signal, subprocess, sys, threading, time, uuid
 from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -7,9 +7,9 @@ from urllib.error import HTTPError
 from urllib.parse import parse_qs
 from urllib.request import Request, urlopen
 
-MODEL = "deepseek-flash"
-API = "https://api.deepseek.com"
-COMPACT_AT = 500_000  # 50% of deepseek-flash's 1M context
+MODEL = "deepseek/deepseek-v4.1-flash"  # the default; setup stores the chosen model, its compact_at and vision in config
+API = "https://openrouter.ai/api/v1"
+COMPACT_AT = 500_000  # for a config without compact_at: 50% of the default model's 1M context
 SHELL_TIMEOUT = 600
 FOREGROUND = 30  # seconds before a running command moves to the background and frees the chat
 CLIP = 20_000  # long tool output keeps this many chars of head and tail
@@ -191,13 +191,15 @@ def http(url, payload=None, data=None, headers=None, timeout=60):
         raise
 
 
-# --- DeepSeek
+# --- OpenRouter
 
 def chat(s, messages, **extra):
+    headers = {"Authorization": f"Bearer {CFG['api_key']}", "HTTP-Referer": "https://github.com/wunsiang-cheng/bluesilk",
+               "X-Title": "bluesilk"}  # the last two: OpenRouter's optional app attribution
     for attempt in range(4):
         try:
-            r = http(f"{API}/chat/completions", {"model": MODEL, "messages": messages, "tools": TOOLS, **extra},
-                     headers={"Authorization": f"Bearer {CFG['api_key']}"}, timeout=900)
+            r = http(f"{API}/chat/completions", {"model": CFG.get("model", MODEL), "messages": messages, "tools": TOOLS, **extra},
+                     headers=headers, timeout=900)
             s.tokens = r["usage"]["prompt_tokens"]
             return r["choices"][0]["message"]
         except OSError as e:  # network errors, timeouts, HTTP errors
@@ -871,6 +873,8 @@ def system_prompt(s):
                          os=platform.platform(), user=getpass.getuser(), cwd=Path.home(), home=HOME,
                          now=datetime.datetime.now().astimezone().isoformat(timespec="minutes"),
                          skills=skills or "(none)", tools=tools or "(none)", memory=(HOME / "MEMORY.md").read_text(errors="replace"))
+    if not CFG.get("vision", True):
+        text += "\n\nThe model has no image input: photos and screenshots reach you as file paths only."
     if s.summary:
         text += f"\n\n## Summary of the earlier conversation\n{s.summary}"
     return text
@@ -882,9 +886,9 @@ def browser_view(msg):
 
 
 def add(s, messages, msg, record=True):
-    messages.append(msg)  # as returned: reasoning_content must be sent back when tools are in play
+    messages.append(msg)  # as returned: reasoning_details must be sent back when tools are in play
     if s.uid and record:  # the dream's own steps and internal browser observations aren't conversation
-        entry = {"t": int(time.time()), "u": s.uid, **{k: v for k, v in msg.items() if k != "reasoning_content"}}
+        entry = {"t": int(time.time()), "u": s.uid, **{k: v for k, v in msg.items() if not k.startswith("reasoning")}}
         if isinstance(entry.get("content"), list):  # no base64 in the log; the text part has the file path
             entry["content"] = "\n".join(p.get("text", "[image]") for p in entry["content"])
         line = json.dumps(entry, ensure_ascii=False) + "\n"
@@ -947,7 +951,7 @@ def chat_turn(s, content, draft_id):
         s.draft_id = 0
         draft(s)  # clears the web status line; nothing to do for Telegram
     send_text(s.uid, reply or "✅")
-    if s.tokens > COMPACT_AT:
+    if s.tokens > CFG.get("compact_at", COMPACT_AT):
         compact(s)
 
 
@@ -1057,7 +1061,9 @@ def worker(s):
 
 
 def as_image(path):
-    """data: URI if DeepSeek can read the file as an image. It sniffs content, not names, so do we."""
+    """data: URI if the model can read the file as an image. Models sniff content, not names, so do we."""
+    if not CFG.get("vision", True):  # a text-only model: the path in the message is all it gets
+        return None
     data = path.read_bytes()
     mime = next((t for sig, t in IMAGE_SIGS if data.startswith(sig)), "image/webp" if data[8:12] == b"WEBP" else None)
     return mime and f"data:{mime};base64,{base64.b64encode(data).decode()}"
@@ -1228,7 +1234,8 @@ a{color:inherit}
  <input type="file" id="file" multiple hidden>
  <form id="cfg" hidden>
   <div>== SETTINGS == <span class="s">blank secrets keep their current value; saving restarts bluesilk</span></div>
-  <label>DEEPSEEK API KEY</label><input name="api_key" type="password" autocomplete="off">
+  <label>OPENROUTER API KEY</label><input name="api_key" type="password" autocomplete="off">
+  <label>MODEL <span class="s">an openrouter.ai/models slug that supports tools; blank = the default</span></label><input name="model">
   <label>TELEGRAM USER IDS <span class="s">comma-separated, each must have pressed Start on the bot; empty = no Telegram</span></label><input name="user_ids">
   <label>TELEGRAM BOT TOKEN</label><input name="bot_token" type="password" autocomplete="off">
   <label>WEB CONSOLE MEMBERS <span class="s">names, comma-separated; empty = no web console</span></label><input name="members">
@@ -1308,7 +1315,7 @@ inp.onpaste=e=>{for(const f of e.clipboardData.files)upload(f)};
 function openCfg(v){
  cfg.hidden=false;$('cancel').hidden=!!v.setup;$('err').textContent='';
  cfg.api_key.value=cfg.bot_token.value='';cfg.api_key.placeholder=v.api_key||'';cfg.bot_token.placeholder=v.bot_token||'';
- cfg.user_ids.value=v.user_ids.join(', ');cfg.host.value=v.host;cfg.port.value=v.port;
+ cfg.model.value=v.model;cfg.model.placeholder=v.default_model;cfg.user_ids.value=v.user_ids.join(', ');cfg.host.value=v.host;cfg.port.value=v.port;
  cfg.members.value=Object.values(v.tokens).join(', ');cfg.mcp.value=v.mcp;
  cfg.browser_visible.checked=v.browser_visible;cfg.browser_cursor.checked=v.browser_cursor;cfg.browser_slow_mo.value=v.browser_slow_mo;
  $('toks').innerHTML=Object.entries(v.tokens).map(([t,n])=>`${esc(n)}: <a href="/#${t}">${location.origin}/#${t}</a>`).join('<br>')||'(members get theirs when saved)';
@@ -1436,7 +1443,17 @@ def parse_names(v):
 
 
 def check_key(v):
-    http(f"{API}/models", headers={"Authorization": f"Bearer {v}"})
+    http(f"{API}/key", headers={"Authorization": f"Bearer {v}"})  # /models is public, only /key rejects a bad key
+
+
+def check_model(slug):
+    """The model exists on OpenRouter and can call tools. Returns its context size and whether it reads images."""
+    m = next((m for m in http(f"{API}/models")["data"] if m["id"] == slug), None)
+    if m is None:
+        raise ValueError(f"{slug!r}: no such model on openrouter.ai/models")
+    if "tools" not in m.get("supported_parameters", []):
+        raise ValueError(f"{slug!r} doesn't support tool calling, which bluesilk needs")
+    return m["context_length"], "image" in m.get("architecture", {}).get("input_modalities", [])
 
 
 def check_bot(token, ids):
@@ -1455,6 +1472,7 @@ def settings_view():
     web, browser = CFG.get("web", {}), CFG.get("browser", {})
     visible = not browser.get("headless", True)
     return {"setup": SETUP, "api_key": mask(CFG.get("api_key", "")), "bot_token": mask(CFG.get("bot_token", "")),
+            "model": CFG.get("model", ""), "default_model": MODEL,
             "user_ids": CFG.get("user_ids", []), "host": web.get("host", "127.0.0.1"), "port": web.get("port", 8321),
             "tokens": web.get("tokens", {}), "mcp": MCP.read_text() if MCP.exists() else "",
             "browser_visible": visible, "browser_cursor": browser.get("show_cursor", visible),
@@ -1464,7 +1482,7 @@ def settings_view():
 def apply_settings(f):
     """Validate a settings form (blank secrets keep their current value), then write config.json and mcp.json."""
     # ponytail: every change restarts bluesilk, a turn in flight is lost; upgrade: apply api_key and members live
-    new = {"api_key": f.get("api_key") or CFG.get("api_key", "")}
+    new = {"api_key": f.get("api_key") or CFG.get("api_key", ""), "model": (f.get("model") or "").strip() or MODEL}
     if "browser" in CFG:
         new["browser"] = CFG["browser"]
     if any(k in f for k in ("browser_visible", "browser_cursor", "browser_slow_mo")):
@@ -1477,6 +1495,8 @@ def apply_settings(f):
         new["browser"] = {**new.get("browser", {}), "enabled": True, "headless": not bool(f.get("browser_visible")),
                           "show_cursor": bool(f.get("browser_cursor")), "slow_mo": slow_mo}
     check_key(new["api_key"])
+    context, new["vision"] = check_model(new["model"])
+    new["compact_at"] = context // 2
     if ids := parse_ids(f.get("user_ids", "")):
         token = f.get("bot_token") or CFG.get("bot_token", "")
         if not token:
@@ -1516,9 +1536,14 @@ def ask(prompt, check, secret=False):
 def setup():
     if CONFIG.exists():
         CFG.update(json.loads(CONFIG.read_text()))
-    print("bluesilk setup: a DeepSeek key, then Telegram members and/or web console members\n")
-    f = {"api_key": ask("DeepSeek API key (platform.deepseek.com/api_keys)", check_key, secret=True)}
-    print("  ✓ DeepSeek key works")
+    print("bluesilk setup: an OpenRouter key and model, then Telegram members and/or web console members\n")
+    f = {"api_key": ask("OpenRouter API key (openrouter.ai/keys)", check_key, secret=True)}
+    print("  ✓ OpenRouter key works")
+
+    def model_ok(v):
+        context, vision = check_model(v or MODEL)
+        print(f"  ✓ {v or MODEL}: {context // 1000}k context, {'reads images' if vision else 'text only (no photos or screenshots)'}")
+    f["model"] = ask(f"Model, an openrouter.ai/models slug that supports tools; empty for {MODEL}", model_ok)
     f["user_ids"] = ask("Team members' Telegram user IDs, comma-separated (each asks @userinfobot, then presses Start on your "
                         "bot); empty to skip Telegram", parse_ids)
     if parse_ids(f["user_ids"]):
@@ -1561,8 +1586,8 @@ def main():
             return install_browser()
         if sys.argv[1:] == ["setup", "web"]:
             return setup_web()
-        if sys.argv[1:2] == ["setup"] or not CONFIG.exists():
-            setup()
+        if sys.argv[1:2] == ["setup"] or not CONFIG.exists() or "model" not in json.loads(CONFIG.read_text()):
+            setup()  # no model: a config from before 0.7.0, whose key was for DeepSeek
         serve()
     except (KeyboardInterrupt, EOFError):
         print()

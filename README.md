@@ -1,6 +1,6 @@
 # bluesilk
 
-A fast, minimal AI agent for individuals and trusted small teams. bluesilk runs on DeepSeek and is available through private Telegram chats, a built-in web console, or both.
+A fast, minimal AI agent for individuals and trusted small teams. bluesilk runs on any tool-calling model on OpenRouter and is available through private Telegram chats, a built-in web console, or both.
 
 The core application is a single Python file with no required third-party runtime dependencies.
 
@@ -16,7 +16,7 @@ The core application is a single Python file with no required third-party runtim
 ## Requirements
 
 - Python 3.10 or newer on a POSIX system
-- A [DeepSeek API key](https://platform.deepseek.com/api_keys)
+- An [OpenRouter API key](https://openrouter.ai/keys)
 - Optional: a Telegram bot token and member user IDs
 - Optional: Playwright and Chromium for browser control
 - Optional: `xdotool` and `scrot` (or `ffmpeg`) on an X11 desktop for desktop control
@@ -49,6 +49,12 @@ bluesilk setup web
 ```
 
 The setup requires at least one Telegram member or web-console member. Configuration and persistent data are stored in `~/.bluesilk/` by default. Set `BLUESILK_HOME` to use another directory.
+
+### Model
+
+Setup asks for an [OpenRouter model](https://openrouter.ai/models) slug; the default is `deepseek/deepseek-v4.1-flash`. The model must support tool calling. Context compaction is set to half of the model's context window. A text-only model still works, but photos and screenshots then reach the agent as file paths only, so browser and desktop control are of little use with it.
+
+Upgrading from 0.6 or earlier: the stored key was for DeepSeek's own API. bluesilk runs setup again on the next start; enter an OpenRouter key.
 
 ## Interfaces
 
