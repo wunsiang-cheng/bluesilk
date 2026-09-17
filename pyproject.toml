@@ -5,10 +5,7 @@ description = "A minimal personal AI agent: OpenRouter + Telegram or a web conso
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
-dependencies = []
-
-[project.optional-dependencies]
-browser = ["playwright>=1.40"]
+dependencies = ["playwright>=1.40"]
 
 [project.urls]
 Repository = "https://github.com/wunsiang-cheng/bluesilk"

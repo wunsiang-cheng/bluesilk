@@ -1,5 +1,5 @@
 """The browser tool: Playwright Chromium driven from screenshots."""
-import atexit, importlib.util, json, queue, re, threading, time, uuid
+import atexit, json, queue, re, threading, time, uuid
 from pathlib import Path
 
 from . import state
@@ -265,11 +265,7 @@ class PlaywrightBrowserBackend:
 
 
 def init_browser_tool():
-    """Publish browser only when its optional Python dependency is installed."""
     if not CFG.get("browser", {}).get("enabled", True):
-        return
-    if importlib.util.find_spec("playwright") is None:
-        log("browser disabled: install with `uv tool install 'bluesilk[browser]'`, then run `bluesilk browser install`")
         return
     if not any(t["function"]["name"] == "browser" for t in TOOLS):
         TOOLS.append(COMPUTER_TOOL)
@@ -280,5 +276,5 @@ def init_browser_tool():
 
 def browser(s, **args):
     if state.BROWSER is None:
-        raise RuntimeError("browser support is unavailable; install bluesilk[browser] and run `bluesilk browser install`")
+        raise RuntimeError("the browser is disabled in the config")
     return state.BROWSER.submit(s, args)

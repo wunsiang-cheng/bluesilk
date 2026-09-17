@@ -6,15 +6,12 @@ requires-python = ">=3.10"
 name = "bluesilk"
 version = "0.10.0"
 source = { editable = "." }
-
-[package.optional-dependencies]
-browser = [
+dependencies = [
     { name = "playwright" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "playwright", marker = "extra == 'browser'", specifier = ">=1.40" }]
-provides-extras = ["browser"]
+requires-dist = [{ name = "playwright", specifier = ">=1.40" }]
 
 [[package]]
 name = "greenlet"

@@ -33,16 +33,14 @@ class BrowserUnitTests(BluesilkTestCase):
         context.close.assert_called_once()
         self.assertEqual((browser.contexts, browser.active, browser.downloads), ({}, {}, {}))
 
-    def test_init_browser_tool_stays_disabled_without_playwright(self):
-        with mock.patch.object(self.bs.browser.importlib.util, "find_spec", return_value=None), \
-             mock.patch.object(self.bs.browser, "log") as log:
-            self.bs.browser.init_browser_tool()
+    def test_init_browser_tool_honours_the_config(self):
+        self.bs.state.CFG["browser"] = {"enabled": False}
+        self.bs.browser.init_browser_tool()
         self.assertIsNone(self.bs.state.BROWSER)
         self.assertFalse(any(t["function"]["name"] == "browser" for t in self.bs.tools.TOOLS))
-        log.assert_called_once()
 
-    def test_browser_explains_unavailable_browser(self):
-        with self.assertRaisesRegex(RuntimeError, "browser support is unavailable"):
+    def test_browser_explains_disabled_browser(self):
+        with self.assertRaisesRegex(RuntimeError, "disabled"):
             self.bs.browser.browser(self.bs.state.Session(), action="observe")
 
 

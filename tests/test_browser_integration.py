@@ -1,4 +1,3 @@
-import importlib.util
 import json
 import threading
 import unittest
@@ -54,7 +53,6 @@ class BrowserFixtureHandler(BaseHTTPRequestHandler):
         pass
 
 
-@unittest.skipUnless(importlib.util.find_spec("playwright"), "Playwright is not installed")
 class ChromiumIntegrationTests(BluesilkTestCase):
     def setUp(self):
         super().setUp()

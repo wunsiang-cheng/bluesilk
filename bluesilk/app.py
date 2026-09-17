@@ -1,5 +1,5 @@
 """Entry points: the Telegram poll loop, serve, and main."""
-import importlib.util, subprocess, sys, threading, time
+import subprocess, sys, threading, time
 from http.server import ThreadingHTTPServer
 
 from . import state
@@ -53,8 +53,6 @@ def serve():
 
 
 def install_browser():
-    if importlib.util.find_spec("playwright") is None:
-        raise SystemExit("Playwright is not installed. First run: uv tool install 'bluesilk[browser]'")
     raise SystemExit(subprocess.run([sys.executable, "-m", "playwright", "install", "chromium"]).returncode)
 
 

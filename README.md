@@ -8,7 +8,7 @@ A minimal personal AI agent. It runs on any tool-calling model on OpenRouter and
 - Memory, reusable skills, custom tools and conversation history
 - Shell access, file transfer, image understanding and background jobs
 - Sub-agents: up to five helpers that report back to the agent, not to you
-- Optional browser control (headless Chromium) and desktop control (X11)
+- Browser control (headless Chromium) and, on X11, desktop control
 - Local and remote MCP servers
 - Automatic context compaction and periodic memory maintenance
 
@@ -18,13 +18,13 @@ A minimal personal AI agent. It runs on any tool-calling model on OpenRouter and
 |---|---|
 | Required | Python 3.10+ on a POSIX system, an [OpenRouter API key](https://openrouter.ai/keys) |
 | Telegram | A bot token from `@BotFather` and your numeric user ID (ask `@userinfobot`) |
-| Browser control | Playwright and Chromium (see below) |
+| Browser control | Chromium, downloaded by `bluesilk browser install` |
 | Desktop control | X11 session with `xdotool` and `scrot` (or `ffmpeg`) |
 
 ## Installation
 
 ```sh
-uv tool install bluesilk        # or: uv tool install 'bluesilk[browser]'
+uv tool install bluesilk
 bluesilk                        # first start runs the interactive setup
 ```
 
@@ -70,11 +70,10 @@ The agent can hand a task to a sub-agent (`assign`), see what it is doing (`insp
 ## Browser control
 
 ```sh
-uv tool install 'bluesilk[browser]'
 bluesilk browser install
 ```
 
-Adds a `browser` tool that drives a headless Chromium from screenshots. Cookies, tabs and downloads persist under `~/.bluesilk/browser/`.
+Downloads Chromium for the `browser` tool, which drives a headless Chromium from screenshots. Cookies, tabs and downloads persist under `~/.bluesilk/browser/`.
 
 ## Desktop control
 
@@ -108,8 +107,7 @@ Tools appear as `<server>__<tool>`. bluesilk does not perform MCP OAuth; provide
 
 | Task | Command |
 |---|---|
-| Offline tests | `python -m unittest discover -s tests -v` |
-| With Chromium tests | `uv sync --extra browser && uv run playwright install chromium && uv run python -m unittest discover -s tests -v` |
+| Tests | `uv run playwright install chromium && uv run python -m unittest discover -s tests -v` |
 | Build | `uv build` |
 
 ## License
