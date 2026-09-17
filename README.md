@@ -1,11 +1,11 @@
 # bluesilk
 
-A fast, minimal AI agent for individuals and trusted small teams. bluesilk runs on any tool-calling model on OpenRouter and is available through private Telegram chats, a built-in web console, or both.
+A fast, minimal personal AI agent. bluesilk runs on any tool-calling model on OpenRouter and is reached through your private Telegram chat, a built-in web console, or both: one conversation, whichever channel you pick up.
 
 ## Features
 
-- Separate conversations and work queues for each team member
-- Shared memory, reusable skills, custom tools, and conversation history
+- One conversation across Telegram and the web console; the reply goes to the channel you wrote on
+- Memory, reusable skills, custom tools, and conversation history
 - Built-in shell access, file transfer, image understanding, and background jobs
 - Optional Chromium control through screenshots and mouse/keyboard actions
 - Local and remote MCP server support
@@ -15,7 +15,7 @@ A fast, minimal AI agent for individuals and trusted small teams. bluesilk runs 
 
 - Python 3.10 or newer on a POSIX system
 - An [OpenRouter API key](https://openrouter.ai/keys)
-- Optional: a Telegram bot token and member user IDs
+- Optional: a Telegram bot token and your Telegram user ID
 - Optional: Playwright and Chromium for browser control
 - Optional: `xdotool` and `scrot` (or `ffmpeg`) on an X11 desktop for desktop control
 
@@ -39,14 +39,13 @@ Start the agent and follow the interactive setup:
 bluesilk
 ```
 
-You can run setup again from the terminal or browser:
+You can run setup again from the terminal, or change settings from the web console (`/settings`):
 
 ```sh
 bluesilk setup
-bluesilk setup web
 ```
 
-The setup requires at least one Telegram member or web-console member. Configuration and persistent data are stored in `~/.bluesilk/` by default. Set `BLUESILK_HOME` to use another directory.
+The setup requires Telegram, the web console, or both. Configuration and persistent data are stored in `~/.bluesilk/` by default. Set `BLUESILK_HOME` to use another directory.
 
 ### Model
 
@@ -54,25 +53,24 @@ Setup asks for an [OpenRouter model](https://openrouter.ai/models) slug; the def
 
 Upgrading from 0.6 or earlier: the stored key was for DeepSeek's own API. bluesilk runs setup again on the next start; enter an OpenRouter key.
 
+Upgrading from 0.8 or earlier: bluesilk was built for a small team; 0.9 is single-user. The first Telegram member of the old config becomes the user, web members and passwords are dropped, and the conversation starts fresh (memory, skills, tools and `history.jsonl` are kept).
+
 ## Interfaces
 
 ### Telegram
 
-Create a bot with `@BotFather`. Before setup, each member must start the bot and provide their numeric Telegram user ID. Messages from unconfigured users and non-private chats are ignored.
+Create a bot with `@BotFather`, press Start on it, and give setup your numeric Telegram user ID (ask `@userinfobot`). Messages from anyone else, and from non-private chats, are ignored.
 
 ### Web console
 
-The web console listens on `http://127.0.0.1:8321/` by default. Members log in with their name and a password they pick on their first login (first come, first served: tell them as soon as you add them). A member who forgets it is reset from the settings page and picks a new one.
+The web console listens on `http://127.0.0.1:8321/` by default (the port is configurable). There is no login: it only listens on localhost, so access is whoever can log in to your OS account. For a remote machine, use an SSH tunnel (`ssh -L 8321:127.0.0.1:8321 host`).
 
 - `Esc` stops the current response.
 - `Ctrl+U`, paste, or drag and drop sends a file.
-- `/new` starts a new personal conversation.
-- `/reset` resets shared agent data and creates a backup.
+- `/new` starts a new conversation.
+- `/reset` resets agent data and creates a backup.
 - `/settings` opens configuration.
 - `/theme` cycles the phosphor: blue, green, amber.
-- `/password` changes your password; `/logout` ends the session.
-
-The console uses plain HTTP. Keep it on localhost or a trusted private network, or place it behind a TLS reverse proxy.
 
 ## Browser control
 
@@ -83,7 +81,7 @@ uv tool install 'bluesilk[browser]'
 bluesilk browser install
 ```
 
-This adds a `browser` tool that drives a headless Chromium from screenshots. Each member gets an isolated browser context with separate cookies, tabs, and downloads.
+This adds a `browser` tool that drives a headless Chromium from screenshots. Cookies, tabs, and downloads persist under `~/.bluesilk/browser/`.
 
 ## Desktop control
 
@@ -93,7 +91,7 @@ On an X11 session with `xdotool` and `scrot` (or `ffmpeg`) installed, bluesilk a
 sudo apt install xdotool scrot
 ```
 
-The screen is one physical desktop shared by the whole team, so actions are serialised and the agent is told to look before it acts. Set `"desktop": {"enabled": false}` in the config to turn it off. Wayland is not supported.
+It is your real screen, so actions are serialised and the agent is told to look before it acts. Set `"desktop": {"enabled": false}` in the config to turn it off. Wayland is not supported.
 
 ## MCP servers
 
@@ -120,7 +118,7 @@ MCP tools are exposed as `<server>__<tool>`. bluesilk does not perform MCP OAuth
 
 All state is stored as plain files under `~/.bluesilk/`, including credentials, conversations, memory, uploaded files, and job output.
 
-bluesilk gives the agent unrestricted shell access as the account running it. Treat every configured member as fully trusted and run it under a dedicated operating-system account, VM, or isolated machine when possible.
+bluesilk gives the agent unrestricted shell access as the account running it. Run it under a dedicated operating-system account, VM, or isolated machine when possible.
 
 ## Development
 

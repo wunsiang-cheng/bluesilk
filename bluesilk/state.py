@@ -19,10 +19,8 @@ HOME = Path(os.environ.get("BLUESILK_HOME", Path.home() / ".bluesilk"))
 CONFIG, STATE_FILE, HISTORY = HOME / "config.json", HOME / "state.json", HOME / "history.jsonl"
 MCP = HOME / "mcp.json"  # {"mcpServers": {"<name>": {"command": ..., "args": [...], "env": {}} or {"url": ..., "token": ..., "headers": {}}}}
 
-CFG, STATE = {}, {}  # STATE: the dream's bookkeeping; conversations live in sessions/<member>.json
-SESSIONS = {}  # Telegram user id or web member name -> Session, one per team member
+CFG, STATE = {}, {}  # STATE: the dream's bookkeeping; the conversation lives in session.json
 SERVERS = {}  # tool name -> (Server, its name on that server)
-SETUP = False  # serving the web console only to finish setup
 HISTORY_LOCK = threading.Lock()
 LAST = {"active": time.time()}
 BROWSER = None
@@ -30,16 +28,17 @@ DESKTOP = None
 
 
 class Session:
-    """One member's private chat: its own queue, worker, context, stop button and live draft."""
+    """The conversation: its queue, worker, context, stop button and live draft. Two exist: the user's and the dream's."""
 
-    def __init__(self, uid, name, web=False):
-        self.uid, self.name, self.file = uid, name, HOME / "sessions" / f"{'web-' if web else ''}{uid}.json"
-        self.q, self.stop = queue.Queue(), threading.Event()  # q: the member's messages and background command results
+    def __init__(self, name="you", dream=False):
+        self.name, self.dream, self.file = name, dream, HOME / "session.json"
+        self.q, self.stop = queue.Queue(), threading.Event()  # q: the user's messages and background command results
         self.busy = False
         self.draft_id, self.draft_text, self.tokens = 0, "", 0
         self.note, self.jobs = "", 0  # note: what the session is doing between turns (compacting); jobs: background commands
         self.summary, self.messages = "", []
-        self.web, self.subs, self.files = web, [], {}  # web: a queue per open browser tab; files: id -> path the agent sent
+        self.web = False  # where the latest message came from: the web console (True) or Telegram; replies go back there
+        self.subs, self.files = [], {}  # subs: a queue per open console tab; files: id -> path the agent sent
 
     def push(self, kind, text):
         for q in list(self.subs):
@@ -52,7 +51,10 @@ class Session:
         return self.note or DREAM.note or (f"{self.jobs} JOB{'S' * (self.jobs > 1)} IN BACKGROUND" if self.jobs else "")
 
 
-DREAM = Session(0, "nobody: this is the periodic background reflection")  # uid 0: not recorded, send reaches everyone
+SESSION = Session()  # load() names it after the user
+DREAM = Session("nobody: this is the periodic background reflection", dream=True)  # not recorded; send reaches the user
+
+
 def log(*a):
     print(time.strftime("%H:%M:%S"), *a, flush=True)
 

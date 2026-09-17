@@ -25,14 +25,11 @@ class UtilityTests(BluesilkTestCase):
             self.assertIsNone(self.bs.state.quiet(lambda: 1 / 0))
             log.assert_called_once()
 
-    def test_parse_ids_accepts_commas_and_spaces(self):
-        self.assertEqual(self.bs.setup.parse_ids("1, 2 3"), [1, 2, 3])
-        self.assertEqual(self.bs.setup.parse_ids(""), [])
-
-    def test_parse_names_validates_each_name(self):
-        self.assertEqual(self.bs.setup.parse_names("alice, bob.smith dev_ops"), ["alice", "bob.smith", "dev_ops"])
-        with self.assertRaisesRegex(ValueError, "letters, digits"):
-            self.bs.setup.parse_names("valid bad/name")
+    def test_parse_int_treats_blank_as_unset(self):
+        self.assertEqual(self.bs.setup.parse_int(" 42 "), 42)
+        self.assertIsNone(self.bs.setup.parse_int(""))
+        with self.assertRaises(ValueError):
+            self.bs.setup.parse_int("alice")
 
     def test_as_image_sniffs_supported_formats(self):
         samples = {
@@ -61,13 +58,13 @@ class UtilityTests(BluesilkTestCase):
 
 class StorageTests(BluesilkTestCase):
     def test_init_home_creates_runtime_layout(self):
-        for name in ("memory", "skills", "tools", "inbox", "jobs", "sessions"):
+        for name in ("memory", "skills", "tools", "inbox", "jobs"):
             self.assertTrue((self.home / name).is_dir())
         self.assertTrue((self.home / "MEMORY.md").is_file())
         self.assertTrue((self.home / "skills" / "reflect.md").is_file())
 
     def test_session_data_removes_browser_image_payload(self):
-        session = self.bs.state.Session("alice", "Alice", web=True)
+        session = self.bs.state.Session()
         session.summary = "summary"
         session.messages = [{
             "role": "user",
@@ -85,7 +82,7 @@ class StorageTests(BluesilkTestCase):
         self.assertIn("base64,secret", session.messages[0]["content"][1]["image_url"]["url"])
 
     def test_add_logs_without_reasoning_or_base64(self):
-        session = self.bs.state.Session("alice", "Alice", web=True)
+        session = self.bs.state.Session()
         messages = []
         msg = {
             "role": "user",
@@ -114,7 +111,7 @@ class StorageTests(BluesilkTestCase):
         self.assertEqual(messages[1]["content"][0]["type"], "image_url")
 
     def test_session_status_shows_the_turn_else_background_work(self):
-        s = self.bs.state.Session("alice", "Alice", web=True)
+        s = self.bs.state.Session()
         self.assertEqual(s.status(), "")
         s.jobs = 2
         self.assertEqual(s.status(), "2 JOBS IN BACKGROUND")
@@ -128,7 +125,7 @@ class StorageTests(BluesilkTestCase):
         self.assertEqual(s.status(), "🔧 ls")
 
     def test_transcript_filters_internal_and_browser_messages(self):
-        session = self.bs.state.Session("alice", "Alice", web=True)
+        session = self.bs.state.Session()
         session.messages = [
             {"role": "system", "content": "system"},
             {"role": "user", "content": "hello"},
@@ -144,8 +141,7 @@ class StorageTests(BluesilkTestCase):
 
     def test_dream_due_requires_idle_sessions_and_elapsed_intervals(self):
         now = 1_000_000
-        session = self.bs.state.Session("alice", "Alice")
-        self.bs.state.SESSIONS[session.uid] = session
+        session = self.bs.state.SESSION
         self.bs.state.LAST["active"] = now - self.bs.state.DREAM_IDLE - 1
         self.bs.state.STATE["last_dream"] = now - self.bs.state.DREAM_EVERY - 1
         self.assertTrue(self.bs.agent.dream_due(now))
@@ -156,7 +152,7 @@ class StorageTests(BluesilkTestCase):
         self.assertFalse(self.bs.agent.dream_due(now))
 
     def test_receive_interrupts_only_reset_commands(self):
-        session = self.bs.state.Session("alice", "Alice")
+        session = self.bs.state.Session()
         self.bs.agent.receive(session, {"text": "hello"})
         self.assertFalse(session.stop.is_set())
         self.assertEqual(session.q.get()["text"], "hello")
@@ -166,7 +162,7 @@ class StorageTests(BluesilkTestCase):
 
 class ShellTests(BluesilkTestCase):
     def test_shell_captures_output_and_removes_job_file(self):
-        session = self.bs.state.Session(0, "test")
+        session = self.bs.state.Session(dream=True)
         result = self.bs.tools.shell(session, "printf hello")
         self.assertEqual(result, "exit 0\nhello")
         self.assertEqual(list((self.home / "jobs").iterdir()), [])

@@ -1,10 +1,10 @@
-"""Telegram transport, and the outbound side of the web console (a web member's send_text is a push)."""
+"""Telegram transport, and the outbound side of the web console: a reply goes back to the channel the user wrote on."""
 import time, uuid
 from pathlib import Path
 from urllib.error import HTTPError
 from urllib.request import urlopen
 
-from .state import CFG, HOME, SESSIONS, http, quiet
+from .state import CFG, HOME, SESSION, http, quiet
 
 
 # --- Telegram
@@ -17,28 +17,29 @@ def tg(method, token=None, **params):
     return http(tg_url(method, token), params, timeout=70)["result"]
 
 
-def send_text(uid, text):
-    if (s := SESSIONS.get(uid)) and s.web:
-        return s.push("msg", text)
+def send_text(text):
+    # ponytail: the reply goes to the channel the user wrote on; an open console tab catches up when it reconnects
+    if SESSION.web:
+        return SESSION.push("msg", text)
     for i in range(0, len(text), 4096):
         chunk = text[i:i + 4096]
         try:
-            tg("sendMessage", chat_id=uid, text=chunk, parse_mode="Markdown")
+            tg("sendMessage", chat_id=CFG["user_id"], text=chunk, parse_mode="Markdown")
         except HTTPError as e:
             if e.code != 400:
                 raise
-            tg("sendMessage", chat_id=uid, text=chunk)  # the model's Markdown didn't parse
+            tg("sendMessage", chat_id=CFG["user_id"], text=chunk)  # the model's Markdown didn't parse
 
 
-def send_file(uid, path):
+def send_file(path):
     path = Path(path).expanduser()
-    if (s := SESSIONS.get(uid)) and s.web:  # the page links to /file/<id>/<name>; only files sent this way are served
+    if SESSION.web:  # the page links to /file/<id>/<name>; only files sent this way are served
         fid = uuid.uuid4().hex
-        s.files[fid] = path
-        return s.push("file", f"{fid}/{path.name}")
-    quiet(tg, "sendChatAction", chat_id=uid, action="upload_document")
+        SESSION.files[fid] = path
+        return SESSION.push("file", f"{fid}/{path.name}")
+    quiet(tg, "sendChatAction", chat_id=CFG["user_id"], action="upload_document")
     b = uuid.uuid4().hex
-    head = (f'--{b}\r\nContent-Disposition: form-data; name="chat_id"\r\n\r\n{uid}\r\n'
+    head = (f'--{b}\r\nContent-Disposition: form-data; name="chat_id"\r\n\r\n{CFG["user_id"]}\r\n'
             f'--{b}\r\nContent-Disposition: form-data; name="document"; filename="{path.name.replace(chr(34), "")}"\r\n\r\n')
     body = head.encode() + path.read_bytes() + f"\r\n--{b}--\r\n".encode()
     http(tg_url("sendDocument"), data=body, headers={"Content-Type": f"multipart/form-data; boundary={b}"}, timeout=600)
@@ -53,18 +54,17 @@ def download(file):
 
 
 def draft(s, text=None):
-    """Live status under the member's message: empty text shows Telegram's "Thinking..." placeholder."""
+    """Live status under the user's message: empty text shows Telegram's "Thinking..." placeholder."""
     if text is not None:
         s.draft_text = text[:300]
-    if s.web:
-        s.push("status", s.status())
+    if SESSION.web:
+        SESSION.push("status", SESSION.status())
     elif s.draft_id:
-        quiet(tg, "sendMessageDraft", chat_id=s.uid, draft_id=s.draft_id, text=s.draft_text, can_stop=True)
+        quiet(tg, "sendMessageDraft", chat_id=CFG["user_id"], draft_id=s.draft_id, text=s.draft_text, can_stop=True)
 
 
 def pulse():
-    for s in SESSIONS.values():
-        draft(s)
+    draft(SESSION)
 
 
 def heartbeat():

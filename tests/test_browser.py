@@ -4,13 +4,6 @@ from tests.support import BluesilkTestCase
 
 
 class BrowserUnitTests(BluesilkTestCase):
-    def test_context_keys_are_stable_and_separate_channels(self):
-        browser = self.bs.browser.PlaywrightBrowserBackend()
-        telegram = self.bs.state.Session("same", "User", web=False)
-        web = self.bs.state.Session("same", "User", web=True)
-        self.assertEqual(browser._key(telegram), browser._key(telegram))
-        self.assertNotEqual(browser._key(telegram), browser._key(web))
-
     def test_need_reports_all_missing_arguments(self):
         with self.assertRaisesRegex(ValueError, "drag requires y, x2"):
             self.bs.browser.PlaywrightBrowserBackend._need({"action": "drag", "x": 1, "y2": 4}, "x", "y", "x2", "y2")
@@ -19,7 +12,7 @@ class BrowserUnitTests(BluesilkTestCase):
         browser = self.bs.browser.PlaywrightBrowserBackend()
         with mock.patch.object(browser, "_context") as context:
             with self.assertRaisesRegex(ValueError, "unknown browser action"):
-                browser._action(self.bs.state.Session("alice", "Alice"), {"action": "launch_missiles"})
+                browser._action(self.bs.state.Session(), {"action": "launch_missiles"})
         context.assert_not_called()
 
     def test_browser_directory_layout_is_private_per_key(self):
@@ -50,7 +43,7 @@ class BrowserUnitTests(BluesilkTestCase):
 
     def test_browser_explains_unavailable_browser(self):
         with self.assertRaisesRegex(RuntimeError, "browser support is unavailable"):
-            self.bs.browser.browser(self.bs.state.Session("alice", "Alice"), action="observe")
+            self.bs.browser.browser(self.bs.state.Session(), action="observe")
 
 
 class InputAndPromptTests(BluesilkTestCase):
@@ -74,10 +67,10 @@ class InputAndPromptTests(BluesilkTestCase):
         tool = self.home / "tools" / "helper"
         tool.write_text("#!/bin/sh\n# helper: run a thing\n")
         (self.home / "MEMORY.md").write_text("Remember this.")
-        session = self.bs.state.Session("alice", "Alice", web=True)
-        self.bs.state.SESSIONS["alice"] = session
+        session = self.bs.state.SESSION
+        session.name = "Alice"
         prompt = self.bs.agent.system_prompt(session)
-        self.assertIn("This conversation is with Alice", prompt)
+        self.assertIn("personal AI agent of Alice", prompt)
         self.assertIn("skills/custom.md: custom: do a thing", prompt)
         self.assertIn("tools/helper: helper: run a thing", prompt)
         self.assertIn("Remember this.", prompt)

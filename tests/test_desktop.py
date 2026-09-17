@@ -14,9 +14,9 @@ class DesktopUnitTests(BluesilkTestCase):
         backend = self.bs.desktop.XDesktopBackend()
         with mock.patch.object(backend, "_x") as x:
             with self.assertRaisesRegex(ValueError, "unknown desktop action"):
-                backend._action(self.bs.state.Session("alice", "Alice"), {"action": "format_disk"})
+                backend._action(self.bs.state.Session(), {"action": "format_disk"})
             with self.assertRaisesRegex(ValueError, "drag requires y, x2"):
-                backend._action(self.bs.state.Session("alice", "Alice"), {"action": "drag", "x": 1, "y2": 4})
+                backend._action(self.bs.state.Session(), {"action": "drag", "x": 1, "y2": 4})
         x.assert_not_called()
 
     def test_actions_map_to_xdotool_and_return_a_screenshot(self):
@@ -28,9 +28,9 @@ class DesktopUnitTests(BluesilkTestCase):
              mock.patch.object(self.bs.desktop.subprocess, "run", side_effect=fake_shot), \
              mock.patch.object(self.bs.desktop.subprocess, "check_output", return_value="1536 1024\n"), \
              mock.patch.object(self.bs.desktop.time, "sleep"):
-            result = backend._action(self.bs.state.Session("alice", "Alice"), {"action": "right_click", "x": 10, "y": 20})
-            backend._action(self.bs.state.Session("alice", "Alice"), {"action": "type", "text": "héllo"})
-            backend._action(self.bs.state.Session("alice", "Alice"), {"action": "scroll", "delta_y": -50})
+            result = backend._action(self.bs.state.Session(), {"action": "right_click", "x": 10, "y": 20})
+            backend._action(self.bs.state.Session(), {"action": "type", "text": "héllo"})
+            backend._action(self.bs.state.Session(), {"action": "scroll", "delta_y": -50})
         self.assertEqual(calls, [(("mousemove", 10, 20, "click", "3"), None),
                                  (("type", "--delay", "12", "--file", "-"), "héllo"),
                                  (("click", "--repeat", 20, "4"), None)])
@@ -45,7 +45,7 @@ class DesktopUnitTests(BluesilkTestCase):
         self.assertFalse(any(t["function"]["name"] == "desktop" for t in self.bs.tools.TOOLS))
         log.assert_called_once()
         with self.assertRaisesRegex(RuntimeError, "desktop control is unavailable"):
-            self.bs.desktop.desktop(self.bs.state.Session("alice", "Alice"), action="observe")
+            self.bs.desktop.desktop(self.bs.state.Session(), action="observe")
 
     def test_init_desktop_tool_publishes_once_when_available(self):
         with mock.patch.dict(os.environ, {"DISPLAY": ":0"}), mock.patch.object(self.bs.desktop.shutil, "which", return_value="/usr/bin/x"):
@@ -53,7 +53,7 @@ class DesktopUnitTests(BluesilkTestCase):
             self.bs.desktop.init_desktop_tool()
         self.assertIsNotNone(self.bs.state.DESKTOP)
         self.assertEqual(sum(t["function"]["name"] == "desktop" for t in self.bs.tools.TOOLS), 1)
-        self.assertIn("`desktop` controls", self.bs.agent.system_prompt(self.bs.state.Session("alice", "Alice")))
+        self.assertIn("`desktop` controls", self.bs.agent.system_prompt(self.bs.state.Session()))
 
 
 @unittest.skipUnless(shutil.which("Xvfb") and shutil.which("xdotool") and (shutil.which("scrot") or shutil.which("ffmpeg")),
@@ -64,7 +64,7 @@ class DesktopIntegrationTests(BluesilkTestCase):
         try:
             time.sleep(1)
             with mock.patch.dict(os.environ, {"DISPLAY": ":97"}):
-                result = self.bs.desktop.XDesktopBackend()._action(self.bs.state.Session("alice", "Alice"), {"action": "click", "x": 5, "y": 5})
+                result = self.bs.desktop.XDesktopBackend()._action(self.bs.state.Session(), {"action": "click", "x": 5, "y": 5})
             self.assertIn('"screen": [640, 480]', result.text)
             self.assertTrue(result.image.startswith("data:image/jpeg;base64,"))
         finally:

@@ -28,7 +28,7 @@ COMPUTER_TOOL = {"type": "function", "function": {
 
 
 class PlaywrightBrowserBackend:
-    """One Playwright thread and Chromium process, with an isolated context per member."""
+    """One Playwright thread and Chromium process, with one persistent context (cookies, tabs, downloads)."""
 
     def __init__(self):
         self.q, self.ready, self.start_lock = queue.Queue(), threading.Event(), threading.Lock()
@@ -114,9 +114,6 @@ class PlaywrightBrowserBackend:
             quiet(self.browser.close)
             quiet(self.playwright.stop)
 
-    def _key(self, s):
-        return uuid.uuid5(uuid.NAMESPACE_URL, f"bluesilk:{'web' if s.web else 'telegram'}:{s.uid}").hex[:16]
-
     def _dir(self, key):
         path = HOME / "browser" / key
         path.mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -135,7 +132,7 @@ class PlaywrightBrowserBackend:
             self.downloads[key] = f"download failed: {e}"
 
     def _context(self, s):
-        key = self._key(s)
+        key = "main"  # ponytail: the dicts below are keyed for the 0.8 per-member contexts; one key now
         if key not in self.contexts:
             root, cfg = self._dir(key), CFG.get("browser", {})
             viewport = cfg.get("viewport", [1280, 720])

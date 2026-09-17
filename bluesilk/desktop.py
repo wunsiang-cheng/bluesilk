@@ -10,7 +10,7 @@ DESKTOP_TOOL = {"type": "function", "function": {
     "name": "desktop",
     "description": "Operate the host's real desktop (X11) from screenshots using mouse and keyboard. Every action "
                    "returns the screen size and a new screenshot; choose pixel coordinates from the newest screenshot. "
-                   "Call it once at a time. The screen is shared by the whole team and a human may be using it: "
+                   "Call it once at a time. The user may be at the screen right now: "
                    "observe before acting.",
     "parameters": {"type": "object", "properties": {
         "action": {"type": "string", "enum": ["observe", "click", "double_click", "right_click", "move", "drag",

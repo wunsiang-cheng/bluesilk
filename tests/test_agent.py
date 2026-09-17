@@ -16,8 +16,7 @@ def tool_call(call_id, name, arguments=None):
 class AgentLoopTests(BluesilkTestCase):
     def setUp(self):
         super().setUp()
-        self.session = self.bs.state.Session("alice", "Alice", web=True)
-        self.bs.state.SESSIONS[self.session.uid] = self.session
+        self.session = self.bs.state.SESSION
 
     def test_run_returns_direct_reply(self):
         messages = []
@@ -104,7 +103,7 @@ class AgentLoopTests(BluesilkTestCase):
              mock.patch.object(self.bs.agent, "compact") as compact, \
              mock.patch.object(self.bs.agent, "draft"):
             self.bs.agent.chat_turn(self.session, "hello", 10)
-        send.assert_called_once_with("alice", "✅")
+        send.assert_called_once_with("✅")
         compact.assert_called_once_with(self.session)
 
     def test_compact_replaces_messages_with_summary(self):
@@ -119,7 +118,7 @@ class AgentLoopTests(BluesilkTestCase):
 
 class TransportTests(BluesilkTestCase):
     def test_chat_retries_server_error_and_records_usage(self):
-        session = self.bs.state.Session("alice", "Alice")
+        session = self.bs.state.Session()
         error = OSError("temporary")
         answer = {"usage": {"prompt_tokens": 123}, "choices": [{"message": {"content": "ok"}}]}
         with mock.patch.object(self.bs.llm, "http", side_effect=[error, answer]) as http, \
@@ -132,7 +131,7 @@ class TransportTests(BluesilkTestCase):
         sleep.assert_called_once_with(5)
 
     def test_chat_does_not_retry_non_rate_limit_client_error(self):
-        session = self.bs.state.Session("alice", "Alice")
+        session = self.bs.state.Session()
         error = HTTPError("url", 401, "unauthorized", {}, None)
         with mock.patch.object(self.bs.llm, "http", side_effect=error) as http:
             self.bs.state.CFG["api_key"] = "bad"

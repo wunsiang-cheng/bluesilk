@@ -1,24 +1,15 @@
 """Setup: the CLI questions and the web settings page both end in apply_settings."""
-import getpass, hashlib, hmac, json, re, secrets
+import getpass, json
 from urllib.error import HTTPError
 
-from . import state
 from .state import API, CFG, CONFIG, HOME, MCP, MODEL, http
 from .telegram import tg
 
 
 # --- setup: the CLI questions and the web settings page both end in apply_settings
 
-def parse_ids(v):
-    return [int(x) for x in v.replace(",", " ").split()]
-
-
-def parse_names(v):
-    names = v.replace(",", " ").split()
-    for n in names:
-        if not re.fullmatch(r"[\w.-]+", n):
-            raise ValueError(f"{n!r}: letters, digits, . _ - only")
-    return names
+def parse_int(v):
+    return int(v) if str(v).strip() else None
 
 
 def check_key(v):
@@ -35,25 +26,14 @@ def check_model(slug):
     return m["context_length"], "image" in m.get("architecture", {}).get("input_modalities", [])
 
 
-def check_bot(token, ids):
-    """The bot exists and can reach every member: each of them must have pressed Start."""
+def check_bot(token, uid):
+    """The bot exists and can reach the user, who must have pressed Start."""
     name = tg("getMe", token=token)["username"]
-    for uid in ids:
-        try:
-            tg("sendChatAction", token=token, chat_id=uid, action="typing")
-        except HTTPError as e:
-            raise ValueError(f"bot can't reach {uid} (have they pressed Start?): {e}") from e
+    try:
+        tg("sendChatAction", token=token, chat_id=uid, action="typing")
+    except HTTPError as e:
+        raise ValueError(f"bot can't reach {uid} (have you pressed Start?): {e}") from e
     return name
-
-
-def hash_password(pw):
-    salt = secrets.token_bytes(16)
-    return f"scrypt${salt.hex()}${hashlib.scrypt(pw.encode(), salt=salt, n=2**14, r=8, p=1).hex()}"
-
-
-def check_password(pw, stored):
-    _, salt, digest = stored.split("$")
-    return hmac.compare_digest(hashlib.scrypt(pw.encode(), salt=bytes.fromhex(salt), n=2**14, r=8, p=1).hex(), digest)
 
 
 def write_config():
@@ -65,34 +45,30 @@ def write_config():
 
 def settings_view():
     mask = lambda v: v and f"{v[:3]}…{v[-4:]}"
-    web = CFG.get("web", {})
-    return {"setup": state.SETUP, "api_key": mask(CFG.get("api_key", "")), "bot_token": mask(CFG.get("bot_token", "")),
-            "model": CFG.get("model", ""), "default_model": MODEL,
-            "user_ids": CFG.get("user_ids", []), "host": web.get("host", "127.0.0.1"), "port": web.get("port", 8321),
-            "members": {n: h is not None for n, h in web.get("members", {}).items()}, "mcp": MCP.read_text() if MCP.exists() else ""}
+    return {"api_key": mask(CFG.get("api_key", "")), "bot_token": mask(CFG.get("bot_token", "")),
+            "model": CFG.get("model", ""), "default_model": MODEL, "user_id": CFG.get("user_id", ""),
+            "port": CFG.get("web", {}).get("port", ""), "mcp": MCP.read_text() if MCP.exists() else ""}
 
 
 def apply_settings(f):
     """Validate a settings form (blank secrets keep their current value), then write config.json and mcp.json."""
-    # ponytail: every change restarts bluesilk, a turn in flight is lost; upgrade: apply api_key and members live
+    # ponytail: every change restarts bluesilk, a turn in flight is lost; upgrade: apply api_key live
     new = {"api_key": f.get("api_key") or CFG.get("api_key", ""), "model": (f.get("model") or "").strip() or MODEL}
     if browser := {k: v for k, v in CFG.get("browser", {}).items() if k in ("enabled", "viewport", "executable_path")}:
         new["browser"] = browser  # hand-edited keys survive; the 0.8 visual-mode keys are dropped
     check_key(new["api_key"])
     context, new["vision"] = check_model(new["model"])
     new["compact_at"] = context // 2
-    if ids := parse_ids(f.get("user_ids", "")):
+    if uid := parse_int(f.get("user_id", "")):
         token = f.get("bot_token") or CFG.get("bot_token", "")
         if not token:
             raise ValueError("Telegram bot token missing")
-        check_bot(token, ids)
-        new.update(bot_token=token, user_ids=ids)
-    if names := parse_names(f.get("members", "")):
-        old, reset = CFG.get("web", {}).get("members", {}), parse_names(f.get("reset", ""))  # members keep their password
-        new["web"] = {"host": f.get("host") or "127.0.0.1", "port": int(f.get("port") or 8321),
-                      "members": {n: None if n in reset else old.get(n) for n in names}}
-    if not (ids or names):
-        raise ValueError("set up Telegram members, web console members, or both")
+        check_bot(token, uid)
+        new.update(bot_token=token, user_id=uid)
+    if port := parse_int(f.get("port", "")):
+        new["web"] = {"port": port}
+    if not (uid or port):
+        raise ValueError("set up Telegram, the web console, or both")
     if (mcp := f.get("mcp")) is not None:  # the CLI doesn't ask: it leaves mcp.json alone
         if mcp.strip():
             json.loads(mcp)
@@ -117,7 +93,7 @@ def ask(prompt, check, secret=False):
 def setup():
     if CONFIG.exists():
         CFG.update(json.loads(CONFIG.read_text()))
-    print("bluesilk setup: an OpenRouter key and model, then Telegram members and/or web console members\n")
+    print("bluesilk setup: an OpenRouter key and model, then Telegram and/or the web console\n")
     f = {"api_key": ask("OpenRouter API key (openrouter.ai/keys)", check_key, secret=True)}
     print("  ✓ OpenRouter key works")
 
@@ -125,15 +101,12 @@ def setup():
         context, vision = check_model(v or MODEL)
         print(f"  ✓ {v or MODEL}: {context // 1000}k context, {'reads images' if vision else 'text only (no photos or screenshots)'}")
     f["model"] = ask(f"Model, an openrouter.ai/models slug that supports tools; empty for {MODEL}", model_ok)
-    f["user_ids"] = ask("Team members' Telegram user IDs, comma-separated (each asks @userinfobot, then presses Start on your "
-                        "bot); empty to skip Telegram", parse_ids)
-    if parse_ids(f["user_ids"]):
-        ids = parse_ids(f["user_ids"])
+    f["user_id"] = ask("Your Telegram user ID (ask @userinfobot, then press Start on your bot); empty to skip Telegram", parse_int)
+    if uid := parse_int(f["user_id"]):
         f["bot_token"] = ask("Telegram bot token (from @BotFather)",
-                             lambda v: print(f"  ✓ bot @{check_bot(v, ids)} can reach all {len(ids)}"), secret=True)
-    f["members"] = ask("Web console members' names, comma-separated; empty to skip the web console", parse_names)
+                             lambda v: print(f"  ✓ bot @{check_bot(v, uid)} can reach you"), secret=True)
+    f["port"] = ask("Web console port (it listens on 127.0.0.1 only); empty to skip the web console", parse_int)
     cfg = apply_settings(f)
     if web := cfg.get("web"):
-        print(f"\nWeb console: http://{web['host']}:{web['port']}/ (change host/port on its settings page). Members log in "
-              f"with their name; a new member sets their password on the first login.")
+        print(f"\nWeb console: http://127.0.0.1:{web['port']}/")
     print(f"\nSaved to {CONFIG}. Starting...\n")

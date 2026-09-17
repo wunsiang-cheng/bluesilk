@@ -2,7 +2,7 @@
 import base64, os, shutil, signal, subprocess, threading, time, uuid
 from pathlib import Path
 
-from .state import CFG, FOREGROUND, HOME, IMAGE_SIGS, SESSIONS, SHELL_TIMEOUT
+from .state import CFG, FOREGROUND, HOME, IMAGE_SIGS, SHELL_TIMEOUT
 from .telegram import send_file, send_text
 
 CLIP = 20_000  # long tool output keeps this many chars of head and tail
@@ -19,8 +19,8 @@ TOOLS = [
             "required": ["command"]}}},
     {"type": "function", "function": {
         "name": "send",
-        "description": "Send a message and/or file right now to the member you're talking with (during reflection: "
-                       "the whole team). Your final reply is delivered automatically; don't duplicate it here.",
+        "description": "Send a message and/or file to the user right now. Your final reply is delivered automatically; "
+                       "don't duplicate it here.",
         "parameters": {"type": "object", "properties": {
             "text": {"type": "string"},
             "file": {"type": "string", "description": "path of a file to send"}}}}},
@@ -40,7 +40,7 @@ def shell(s, command, timeout=SHELL_TIMEOUT):
                              stdin=subprocess.DEVNULL, stdout=f, stderr=subprocess.STDOUT, start_new_session=True)
     start = time.time()
     while (note := ended(p, start, int(timeout), s.stop)) is None:
-        if s.uid and time.time() - start > FOREGROUND:  # the dream has nobody to report back to, so it waits
+        if not s.dream and time.time() - start > FOREGROUND:  # the dream has nobody to report back to, so it waits
             s.jobs += 1
             threading.Thread(target=background, args=(s, p, out, start, int(timeout), command), daemon=True).start()
             return (f"[still running after {FOREGROUND}s, moved to the background (process group {p.pid}, output: {out}). "
@@ -81,11 +81,10 @@ class ToolResult:
 
 
 def send(s, text="", file=""):
-    for uid in [s.uid] if s.uid else list(SESSIONS):  # the dream reports to the whole team
-        if text:
-            send_text(uid, text)
-        if file:
-            send_file(uid, file)
+    if text:
+        send_text(text)
+    if file:
+        send_file(file)
     return "sent"
 
 

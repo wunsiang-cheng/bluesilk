@@ -64,7 +64,7 @@ class ChromiumIntegrationTests(BluesilkTestCase):
         self.url = f"http://127.0.0.1:{self.httpd.server_address[1]}/"
         self.bs.state.CFG["browser"] = {"viewport": [640, 480]}
         self.browser = self.bs.state.BROWSER = self.bs.browser.PlaywrightBrowserBackend()
-        self.alice = self.bs.state.Session("alice", "Alice", web=True)
+        self.alice = self.bs.state.Session()
 
     def tearDown(self):
         if self.bs.state.BROWSER is not None:
@@ -110,21 +110,11 @@ class ChromiumIntegrationTests(BluesilkTestCase):
         self.assertEqual(self.details(self.action(action="close"))["status"], "closed")
         self.assertEqual(self.details(self.action(action="open", url=self.url))["title"], "remembered")
 
-    def test_real_browser_keeps_member_contexts_isolated(self):
-        bob = self.bs.state.Session("bob", "Bob", web=True)
-        self.action(self.alice, action="open", url=self.url)
-        self.assertEqual(self.details(self.action(self.alice, action="click", x=80, y=325))["title"], "remembered")
-
-        bob_result = self.details(self.action(bob, action="open", url=self.url))
-        self.assertEqual(bob_result["title"], "ready")
-        self.assertEqual(len(self.browser.contexts), 2)
-
     def test_real_browser_limits_saved_screenshots(self):
         self.action(action="open", url=self.url)
         for _ in range(22):
             self.action(action="observe")
-        key = self.browser._key(self.alice)
-        screenshots = list((self.home / "browser" / key / "screenshots").glob("*.jpg"))
+        screenshots = list((self.home / "browser" / "main" / "screenshots").glob("*.jpg"))
         self.assertEqual(len(screenshots), 20)
 
     def test_real_browser_wait_honors_stop(self):
