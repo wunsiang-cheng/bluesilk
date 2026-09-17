@@ -9,7 +9,7 @@ from .desktop import desktop, init_desktop_tool
 from .llm import chat
 from .mcp import mcp_call, mcp_connect
 from .state import (CFG, COMPACT_AT, CONFIG, DREAM, DREAM_EVERY, DREAM_IDLE, HISTORY, HISTORY_LOCK, HOME, LAST, MCP, SERVERS,
-                    SESSIONS, STATE, STATE_FILE, TOKENS, Session, log, quiet, save)
+                    SESSIONS, STATE, STATE_FILE, Session, log, quiet, save)
 from .telegram import download, draft, send_text, tg
 from .tools import ToolResult, as_image, send, shell
 
@@ -312,7 +312,8 @@ def init_home():
 def load():
     CFG.update(json.loads(CONFIG.read_text()))
     CFG.setdefault("user_ids", [CFG["user_id"]] if "user_id" in CFG else [])  # 0.1.0 had a single user_id
-    TOKENS.update(CFG.get("web", {}).get("tokens", {}))
+    if web := CFG.get("web"):
+        web.setdefault("members", {n: None for n in web.pop("tokens", {}).values()})  # 0.7.0 login links: they pick a password
     init_home()
     init_browser_tool()
     init_desktop_tool()
@@ -325,7 +326,7 @@ def load():
         c = quiet(tg, "getChat", chat_id=uid) or {}
         SESSIONS[uid] = Session(uid, " ".join(filter(None, [c.get("first_name"), c.get("username") and f"@{c['username']}",
                                                              f"(id {uid})"])))
-    for name in TOKENS.values():
+    for name in CFG.get("web", {}).get("members", {}):
         SESSIONS[name] = Session(name, name, web=True)
     for s in SESSIONS.values():
         if s.file.exists():

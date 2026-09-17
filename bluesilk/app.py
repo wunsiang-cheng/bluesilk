@@ -4,8 +4,8 @@ from http.server import ThreadingHTTPServer
 
 from . import state
 from .agent import COMMANDS, dreamer, load, receive, worker
-from .setup import setup
-from .state import CFG, CONFIG, SESSIONS, TOKENS, Session, log, quiet
+from .setup import hash_password, setup
+from .state import CFG, CONFIG, SESSIONS, Session, log, quiet
 from .telegram import heartbeat, tg
 from .web import Web
 
@@ -57,16 +57,17 @@ def serve():
 
 
 def setup_web():
-    """Setup in the browser: the console in setup mode, one-time token, its settings page saves and restarts."""
+    """Setup in the browser: the console in setup mode, one-time password, its settings page saves and restarts."""
     state.SETUP = True
     if CONFIG.exists():
         CFG.update(json.loads(CONFIG.read_text()))
-    token = secrets.token_urlsafe(24)
-    TOKENS[token] = "setup"
+    password = secrets.token_urlsafe(12)
+    CFG.setdefault("web", {}).setdefault("members", {})["setup"] = hash_password(password)  # apply_settings drops it
     SESSIONS["setup"] = Session("setup", "setup", web=True)  # no worker: only /settings does anything
     web = CFG.get("web", {})
     httpd = ThreadingHTTPServer((web.get("host", "127.0.0.1"), web.get("port", 8321)), Web)
-    log(f"open http://{httpd.server_address[0]}:{httpd.server_address[1]}/#{token} to set up bluesilk, Ctrl+C to stop")
+    log(f"open http://{httpd.server_address[0]}:{httpd.server_address[1]}/ and log in as setup with password {password} "
+        "to set up bluesilk, Ctrl+C to stop")
     httpd.serve_forever()
 
 

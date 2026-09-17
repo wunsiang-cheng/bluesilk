@@ -1,5 +1,5 @@
 """Setup: the CLI questions and the web settings page both end in apply_settings."""
-import getpass, json, re, secrets
+import getpass, hashlib, hmac, json, re, secrets
 from urllib.error import HTTPError
 
 from . import state
@@ -46,6 +46,23 @@ def check_bot(token, ids):
     return name
 
 
+def hash_password(pw):
+    salt = secrets.token_bytes(16)
+    return f"scrypt${salt.hex()}${hashlib.scrypt(pw.encode(), salt=salt, n=2**14, r=8, p=1).hex()}"
+
+
+def check_password(pw, stored):
+    _, salt, digest = stored.split("$")
+    return hmac.compare_digest(hashlib.scrypt(pw.encode(), salt=bytes.fromhex(salt), n=2**14, r=8, p=1).hex(), digest)
+
+
+def write_config():
+    HOME.mkdir(mode=0o700, parents=True, exist_ok=True)
+    CONFIG.touch(mode=0o600)
+    CONFIG.chmod(0o600)
+    CONFIG.write_text(json.dumps(CFG))
+
+
 def settings_view():
     mask = lambda v: v and f"{v[:3]}…{v[-4:]}"
     web, browser = CFG.get("web", {}), CFG.get("browser", {})
@@ -53,7 +70,7 @@ def settings_view():
     return {"setup": state.SETUP, "api_key": mask(CFG.get("api_key", "")), "bot_token": mask(CFG.get("bot_token", "")),
             "model": CFG.get("model", ""), "default_model": MODEL,
             "user_ids": CFG.get("user_ids", []), "host": web.get("host", "127.0.0.1"), "port": web.get("port", 8321),
-            "tokens": web.get("tokens", {}), "mcp": MCP.read_text() if MCP.exists() else "",
+            "members": {n: h is not None for n, h in web.get("members", {}).items()}, "mcp": MCP.read_text() if MCP.exists() else "",
             "browser_visible": visible, "browser_cursor": browser.get("show_cursor", visible),
             "browser_slow_mo": browser.get("slow_mo", 0)}
 
@@ -83,22 +100,19 @@ def apply_settings(f):
         check_bot(token, ids)
         new.update(bot_token=token, user_ids=ids)
     if names := parse_names(f.get("members", "")):
-        old = {n: t for t, n in CFG.get("web", {}).get("tokens", {}).items()}  # members keep their token
+        old, reset = CFG.get("web", {}).get("members", {}), parse_names(f.get("reset", ""))  # members keep their password
         new["web"] = {"host": f.get("host") or "127.0.0.1", "port": int(f.get("port") or 8321),
-                      "tokens": {old.get(n) or secrets.token_urlsafe(24): n for n in names}}
+                      "members": {n: None if n in reset else old.get(n) for n in names}}
     if not (ids or names):
         raise ValueError("set up Telegram members, web console members, or both")
     if (mcp := f.get("mcp")) is not None:  # the CLI doesn't ask: it leaves mcp.json alone
         if mcp.strip():
             json.loads(mcp)
-    HOME.mkdir(mode=0o700, parents=True, exist_ok=True)
-    CONFIG.touch(mode=0o600)
-    CONFIG.chmod(0o600)
-    CONFIG.write_text(json.dumps(new))
-    if mcp is not None:
-        MCP.write_text(mcp) if mcp.strip() else MCP.unlink(missing_ok=True)
     CFG.clear()
     CFG.update(new)
+    write_config()
+    if mcp is not None:
+        MCP.write_text(mcp) if mcp.strip() else MCP.unlink(missing_ok=True)
     return new
 
 
@@ -132,7 +146,6 @@ def setup():
     f["members"] = ask("Web console members' names, comma-separated; empty to skip the web console", parse_names)
     cfg = apply_settings(f)
     if web := cfg.get("web"):
-        print(f"\nWeb console: http://{web['host']}:{web['port']}/ (change host/port on its settings page). Login links:")
-        for token, name in web["tokens"].items():
-            print(f"  {name}: http://{web['host']}:{web['port']}/#{token}")
+        print(f"\nWeb console: http://{web['host']}:{web['port']}/ (change host/port on its settings page). Members log in "
+              f"with their name; a new member sets their password on the first login.")
     print(f"\nSaved to {CONFIG}. Starting...\n")

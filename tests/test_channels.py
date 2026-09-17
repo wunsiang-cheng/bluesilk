@@ -19,19 +19,36 @@ class SettingsTests(BluesilkTestCase):
         self.assertEqual(result["api_key"], "openrouter-key")
         self.assertEqual(result["model"], self.bs.state.MODEL)  # blank model: the default
         self.assertEqual((result["compact_at"], result["vision"]), (524_288, True))
-        self.assertEqual(set(result["web"]["tokens"].values()), {"alice", "bob"})
+        self.assertEqual(result["web"]["members"], {"alice": None, "bob": None})  # they pick a password on first login
         self.assertEqual(result["web"]["port"], 9000)
         self.assertEqual(self.bs.state.CONFIG.stat().st_mode & 0o777, 0o600)
 
-    def test_apply_settings_preserves_member_tokens_and_blank_secrets(self):
+    def test_apply_settings_preserves_member_passwords_and_blank_secrets(self):
         self.bs.state.CFG.update({
             "api_key": "old-key",
-            "web": {"host": "127.0.0.1", "port": 8321, "tokens": {"existing": "alice"}},
+            "web": {"host": "127.0.0.1", "port": 8321, "members": {"alice": "scrypt$00$00", "bob": "scrypt$11$11"}},
         })
         with mock.patch.object(self.bs.setup, "check_key"), mock.patch.object(self.bs.setup, "check_model", return_value=(1_048_576, True)):
-            result = self.bs.setup.apply_settings({"api_key": "", "user_ids": "", "members": "alice carol"})
+            result = self.bs.setup.apply_settings({"api_key": "", "user_ids": "", "members": "alice bob carol", "reset": "bob"})
         self.assertEqual(result["api_key"], "old-key")
-        self.assertEqual(next(token for token, name in result["web"]["tokens"].items() if name == "alice"), "existing")
+        self.assertEqual(result["web"]["members"], {"alice": "scrypt$00$00", "bob": None, "carol": None})
+        self.assertEqual(json.loads(self.bs.state.CONFIG.read_text())["web"]["members"]["alice"], "scrypt$00$00")
+
+    def test_password_hash_round_trip(self):
+        stored = self.bs.setup.hash_password("hunter22")
+        self.assertTrue(stored.startswith("scrypt$"))
+        self.assertNotEqual(stored, self.bs.setup.hash_password("hunter22"))  # fresh salt
+        self.assertTrue(self.bs.setup.check_password("hunter22", stored))
+        self.assertFalse(self.bs.setup.check_password("hunter23", stored))
+
+    def test_load_turns_old_login_links_into_members_without_passwords(self):
+        self.bs.state.CONFIG.write_text(json.dumps({"api_key": "k", "model": "vendor/m", "user_ids": [],
+                                                    "web": {"host": "127.0.0.1", "port": 8321, "tokens": {"abc": "alice"}}}))
+        with mock.patch.object(self.bs.agent, "mcp_connect"), mock.patch.object(self.bs.agent, "init_browser_tool"), \
+                mock.patch.object(self.bs.agent, "init_desktop_tool"):
+            self.bs.agent.load()
+        self.assertEqual(self.bs.state.CFG["web"], {"host": "127.0.0.1", "port": 8321, "members": {"alice": None}})
+        self.assertTrue(self.bs.state.SESSIONS["alice"].web)
 
     def test_apply_settings_validates_required_channel_and_browser_delay(self):
         with mock.patch.object(self.bs.setup, "check_key"), mock.patch.object(self.bs.setup, "check_model", return_value=(1_048_576, True)):
@@ -60,10 +77,12 @@ class SettingsTests(BluesilkTestCase):
         self.assertEqual((result["compact_at"], result["vision"]), (100_000, False))
 
     def test_settings_view_masks_secrets(self):
-        self.bs.state.CFG.update({"api_key": "abcdefgh", "bot_token": "12345678", "user_ids": [7], "model": "vendor/m"})
+        self.bs.state.CFG.update({"api_key": "abcdefgh", "bot_token": "12345678", "user_ids": [7], "model": "vendor/m",
+                                  "web": {"members": {"alice": "scrypt$00$00", "bob": None}}})
         view = self.bs.setup.settings_view()
         self.assertEqual(view["api_key"], "abc…efgh")
         self.assertEqual(view["bot_token"], "123…5678")
+        self.assertEqual(view["members"], {"alice": True, "bob": False})
         self.assertEqual((view["model"], view["default_model"]), ("vendor/m", self.bs.state.MODEL))
 
 
