@@ -21,6 +21,7 @@ MCP = HOME / "mcp.json"  # {"mcpServers": {"<name>": {"command": ..., "args": [.
 
 CFG, STATE = {}, {}  # STATE: the dream's bookkeeping; the conversation lives in session.json
 SERVERS = {}  # tool name -> (Server, its name on that server)
+AGENTS = {}  # name -> Session: the main agent's sub-agents, each on its own thread; gone at restart, like jobs
 HISTORY_LOCK = threading.Lock()
 LAST = {"active": time.time()}
 BROWSER = None
@@ -30,8 +31,9 @@ DESKTOP = None
 class Session:
     """The conversation: its queue, worker, context, stop button and live draft. Two exist: the user's and the dream's."""
 
-    def __init__(self, name="you", dream=False):
+    def __init__(self, name="you", dream=False, task=""):
         self.name, self.dream, self.file = name, dream, HOME / "session.json"
+        self.task = task  # a sub-agent: dream=True too (unrecorded, shell waits), and it reports to the main agent, not the user
         self.q, self.stop = queue.Queue(), threading.Event()  # q: the user's messages and background command results
         self.busy = False
         self.draft_id, self.draft_text, self.tokens = 0, "", 0
@@ -53,6 +55,10 @@ class Session:
 
 SESSION = Session()  # load() names it after the user
 DREAM = Session("nobody: this is the periodic background reflection", dream=True)  # not recorded; send reaches the user
+
+
+def push_agents():
+    SESSION.push("agents", [{"name": n, "task": a.task, "doing": a.draft_text} for n, a in AGENTS.items()])
 
 
 def log(*a):

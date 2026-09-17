@@ -1,4 +1,5 @@
 import json
+import threading
 from urllib.error import HTTPError
 from unittest import mock
 
@@ -114,6 +115,52 @@ class AgentLoopTests(BluesilkTestCase):
         self.assertEqual(self.session.summary, "short summary")
         self.assertEqual(self.session.messages, [{"role": "system", "content": "new system"}])
         self.assertEqual(chat.call_args.kwargs, {"tool_choice": "none"})
+
+
+class SubagentTests(BluesilkTestCase):
+    def setUp(self):
+        super().setUp()
+        self.session = self.bs.state.SESSION
+        self.bs.state.CFG.update(api_key="k")
+
+    def test_assign_runs_a_sub_agent_that_reports_to_the_main_queue(self):
+        tab = self.session.subs
+        tab.append(self.bs.state.queue.Queue())
+        with mock.patch.object(self.bs.agent, "run", return_value="the report") as run:
+            note = self.bs.agent.subagent(self.session, "assign", "researcher", "find X")
+            item = self.session.q.get(timeout=5)
+        self.assertIn("researcher started", note)
+        self.assertEqual(item, "[sub-agent researcher finished: find X]\nthe report")
+        self.assertEqual(self.bs.state.AGENTS, {})
+        sub, messages = run.call_args.args
+        self.assertEqual((sub.name, sub.task, sub.dream), ("researcher", "find X", True))
+        self.assertIn("Task: find X", messages[1]["content"])
+        self.assertEqual([tab[0].get_nowait() for _ in range(2)],  # the console saw it appear and go
+                         [("agents", [{"name": "researcher", "task": "find X", "doing": ""}]), ("agents", [])])
+
+    def test_sub_agents_neither_send_nor_delegate(self):
+        sub = self.bs.state.Session("helper", dream=True, task="t")
+        self.assertIn("error", self.bs.tools.send(sub, text="hi"))
+        with self.assertRaisesRegex(ValueError, "only the main agent"):
+            self.bs.agent.subagent(sub, "assign", "nested", "t")
+        with self.assertRaisesRegex(ValueError, "no sub-agent"):
+            self.bs.agent.subagent(self.session, "inspect", "nobody")
+
+    def test_dismiss_stops_the_sub_agent_without_a_report(self):
+        def stalled(sub, messages):
+            sub.stop.wait(5)
+            return "⏹ stopped"
+        with mock.patch.object(self.bs.agent, "run", side_effect=stalled):
+            self.bs.agent.subagent(self.session, "assign", "slow", "wait")
+            sub = self.bs.state.AGENTS["slow"]
+            self.assertIn('"doing": "thinking"', self.bs.agent.subagent(self.session, "inspect", "slow"))
+            self.assertEqual(self.bs.agent.subagent(self.session, "dismiss", "slow"), "dismissed")
+            self.assertTrue(sub.stop.is_set())
+            for t in threading.enumerate():
+                if t.name == "bluesilk-slow":
+                    t.join(5)
+        self.assertEqual(self.bs.state.AGENTS, {})
+        self.assertTrue(self.session.q.empty())
 
 
 class TransportTests(BluesilkTestCase):

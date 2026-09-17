@@ -7,6 +7,7 @@ A fast, minimal personal AI agent. bluesilk runs on any tool-calling model on Op
 - One conversation across Telegram and the web console; the reply goes to the channel you wrote on
 - Memory, reusable skills, custom tools, and conversation history
 - Built-in shell access, file transfer, image understanding, and background jobs
+- Sub-agents: the agent delegates tasks to up to five helpers that report back to it
 - Optional Chromium control through screenshots and mouse/keyboard actions
 - Local and remote MCP server support
 - Automatic context compaction and periodic memory maintenance
@@ -71,6 +72,10 @@ The web console listens on `http://127.0.0.1:8321/` by default (the port is conf
 - `/reset` resets agent data and creates a backup.
 - `/settings` opens configuration.
 - `/theme` cycles the phosphor: blue, green, amber.
+
+## Sub-agents
+
+The agent can hand a task to a sub-agent (`assign`), see what it is doing (`inspect`) or stop it (`dismiss`). A sub-agent runs on its own thread with the same tools, memory and skills, but it cannot message you or delegate further: its report goes to the main agent, which decides what to tell you. The web console lists the running sub-agents above the status line. Sub-agents, like background jobs, do not survive a restart.
 
 ## Browser control
 

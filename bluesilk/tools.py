@@ -24,6 +24,17 @@ TOOLS = [
         "parameters": {"type": "object", "properties": {
             "text": {"type": "string"},
             "file": {"type": "string", "description": "path of a file to send"}}}}},
+    {"type": "function", "function": {
+        "name": "subagent",
+        "description": "Delegate a task to a sub-agent: it works on its own thread with the same tools, memory and skills, but "
+                       "can't send to the user or delegate further. assign returns at once; the sub-agent's report arrives later "
+                       "as a message, like a background command. inspect shows what it is doing; dismiss stops it, no report. "
+                       "Up to 5 at a time.",
+        "parameters": {"type": "object", "properties": {
+            "action": {"type": "string", "enum": ["assign", "inspect", "dismiss"]},
+            "name": {"type": "string", "description": "short and unique, e.g. researcher"},
+            "task": {"type": "string", "description": "for assign: the whole task with every fact it needs; it doesn't see this conversation"}},
+            "required": ["action", "name"]}}},
 ]
 
 # --- tools
@@ -81,6 +92,8 @@ class ToolResult:
 
 
 def send(s, text="", file=""):
+    if s.task:
+        return "error: a sub-agent doesn't talk to the user; report in your final reply"
     if text:
         send_text(text)
     if file:

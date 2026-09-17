@@ -6,7 +6,7 @@ from urllib.parse import parse_qs
 
 from .agent import browser_view, receive, tool_label
 from .setup import apply_settings, settings_view
-from .state import HOME, SESSION
+from .state import AGENTS, HOME, SESSION
 
 
 # --- web console
@@ -95,6 +95,7 @@ class Web(BaseHTTPRequestHandler):
             self.event("hello", s.name)
             self.event("history", transcript(s))
             self.event("status", s.status())  # a page reloaded mid-turn
+            self.event("agents", [{"name": n, "task": a.task, "doing": a.draft_text} for n, a in AGENTS.items()])
             while True:
                 try:
                     self.event(*q.get(timeout=20))

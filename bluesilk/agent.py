@@ -1,5 +1,5 @@
 """The agent loop: prompts, tool dispatch, a turn, compaction, the dream, and loading state at start."""
-import datetime, getpass, json, platform, time
+import datetime, getpass, json, platform, threading, time
 from pathlib import Path
 from urllib.error import HTTPError
 
@@ -9,8 +9,8 @@ from .desktop import desktop, init_desktop_tool
 from .llm import chat
 from .mcp import mcp_call, mcp_connect
 from .setup import write_config
-from .state import (CFG, COMPACT_AT, CONFIG, DREAM, DREAM_EVERY, DREAM_IDLE, HISTORY, HISTORY_LOCK, HOME, LAST, MCP, SERVERS,
-                    SESSION, STATE, STATE_FILE, log, quiet, save)
+from .state import (AGENTS, CFG, COMPACT_AT, CONFIG, DREAM, DREAM_EVERY, DREAM_IDLE, HISTORY, HISTORY_LOCK, HOME, LAST, MCP,
+                    SERVERS, SESSION, STATE, STATE_FILE, Session, log, push_agents, quiet, save)
 from .telegram import download, draft, pulse, send_text, tg
 from .tools import ToolResult, as_image, send, shell
 
@@ -56,6 +56,9 @@ Use when asked to reflect or dream, and on the periodic trigger.
 4. If anything substantive changed, send a short summary. Otherwise stay silent.
 """
 
+SUB = ("You are {name}, a sub-agent of bluesilk, working on one task for the main agent. Your final reply goes to the main "
+       "agent, not the user, so make it a complete report; send is unavailable to you.\n\nTask: {task}")
+
 COMMANDS = [{"command": "new", "description": "Start a new conversation"},
             {"command": "reset", "description": "Wipe memory, skills, tools and history (keeps config, old data backed up)"}]
 
@@ -70,7 +73,10 @@ def tool_label(c):
     except ValueError:
         args = {}
     name = c["function"]["name"]
-    return ({"browser": "🖱", "desktop": "🖥"}.get(name, "🔧") + f" {args.get('action') or args.get('command') or name}")[:300]
+    label = args.get("action") or args.get("command") or name
+    if name == "subagent":
+        label += f" {args.get('name', '')}"
+    return ({"browser": "🖱", "desktop": "🖥", "subagent": "🤖"}.get(name, "🔧") + f" {label}")[:300]
 
 
 def call_tool(s, c):
@@ -78,7 +84,7 @@ def call_tool(s, c):
         args = json.loads(c["function"]["arguments"] or "{}")
         name = c["function"]["name"]
         draft(s, tool_label(c))
-        fn = {"shell": shell, "send": send, "browser": browser, "desktop": desktop}.get(name)
+        fn = {"shell": shell, "send": send, "browser": browser, "desktop": desktop, "subagent": subagent}.get(name)
         return fn(s, **args) if fn else mcp_call(s, name, args)
     except Exception as e:
         return f"error: {e!r}"
@@ -160,6 +166,48 @@ def run(s, messages):
             return "⏹ stopped"
 
 
+def subagent(s, action, name, task=""):
+    if s is not SESSION:
+        raise ValueError("only the main agent has sub-agents")  # ponytail: one level; nesting multiplies cost with little to gain
+    if action == "assign":
+        if name in AGENTS:
+            raise ValueError(f"{name!r} is still working: inspect or dismiss it first")
+        if len(AGENTS) >= 5:
+            raise ValueError("5 sub-agents already; wait for a report or dismiss one")
+        if not task:
+            raise ValueError("assign requires task")
+        sub = AGENTS[name] = Session(name, dream=True, task=task)
+        threading.Thread(target=sub_run, args=(sub,), name=f"bluesilk-{name}", daemon=True).start()
+        push_agents()
+        return f"{name} started; its report arrives later as a message. End your turn now and tell the user what it's doing."
+    if (sub := AGENTS.get(name)) is None:
+        raise ValueError(f"no sub-agent {name!r}")
+    if action == "dismiss":
+        sub.stop.set()
+        del AGENTS[name]
+        push_agents()
+        return "dismissed"
+    if action == "inspect":
+        last = next((m["content"] for m in reversed(sub.messages) if m["role"] == "assistant" and m.get("content")), "")
+        return json.dumps({"name": name, "task": sub.task, "doing": sub.draft_text or "thinking", "tokens": sub.tokens,
+                           "steps": len(sub.messages) - 2, "last_said": last[:2000]}, ensure_ascii=False)
+    raise ValueError(f"unknown subagent action: {action!r}")
+
+
+def sub_run(sub):
+    # ponytail: no compaction, the same model; a task that outgrows the context fails and says so in its report
+    sub.messages = [{"role": "system", "content": system_prompt(sub)},
+                    {"role": "user", "content": SUB.format(name=sub.name, task=sub.task)}]
+    try:
+        report = run(sub, sub.messages)
+    except Exception as e:
+        report = f"[failed: {e!r}]"
+    if AGENTS.get(sub.name) is sub:  # not dismissed meanwhile
+        del AGENTS[sub.name]
+        push_agents()
+        SESSION.q.put(f"[sub-agent {sub.name} finished: {sub.task}]\n{report}")
+
+
 def trim_images(messages):
     budget = IMAGE_BUDGET
     for m in reversed(messages):
@@ -233,7 +281,7 @@ def dreamer():
 
 
 def dream_due(now):
-    return (not (SESSION.busy or not SESSION.q.empty())
+    return (not (SESSION.busy or not SESSION.q.empty() or AGENTS)
             and now - LAST["active"] > DREAM_IDLE and now - STATE["last_dream"] > DREAM_EVERY)
 
 
@@ -245,8 +293,10 @@ def new_chat(s):
 
 def reset(s):
     # no waiting on the others; an API call already in flight finishes into the fresh install
-    for x in (SESSION, DREAM):
+    for x in (SESSION, DREAM, *AGENTS.values()):
         x.stop.set()
+    AGENTS.clear()
+    push_agents()
     if state.BROWSER is not None:
         quiet(state.BROWSER.reset)
     backup = HOME.with_name(f"{HOME.name}.bak-{time.strftime('%Y%m%d-%H%M%S')}")

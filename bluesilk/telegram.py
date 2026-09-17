@@ -4,7 +4,7 @@ from pathlib import Path
 from urllib.error import HTTPError
 from urllib.request import urlopen
 
-from .state import CFG, HOME, SESSION, http, quiet
+from .state import CFG, HOME, SESSION, http, push_agents, quiet
 
 
 # --- Telegram
@@ -57,6 +57,8 @@ def draft(s, text=None):
     """Live status under the user's message: empty text shows Telegram's "Thinking..." placeholder."""
     if text is not None:
         s.draft_text = text[:300]
+    if s.task:  # a sub-agent's step shows in the console's agent list, not on the status line
+        return push_agents()
     if SESSION.web:
         SESSION.push("status", SESSION.status())
     elif s.draft_id:

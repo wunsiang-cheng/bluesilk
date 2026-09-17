@@ -25,6 +25,7 @@ a{color:inherit}
 #top{display:flex;justify-content:space-between;gap:1ch;background:var(--ph);color:var(--bg);text-shadow:none;padding:2px 1ch;margin-bottom:8px;white-space:pre}  /* reverse video, like a real status line */
 #led{color:var(--dim)}#led.on{color:var(--hi);text-shadow:0 0 6px var(--hi)}
 #st{opacity:.7;min-height:1.45em;white-space:pre-wrap;border-top:1px solid var(--dim);padding-top:5px;margin-top:8px}
+#ag{opacity:.7;white-space:pre-wrap;border-top:1px solid var(--dim);padding-top:5px;margin-top:8px}
 #ln{display:flex}
 #ps{white-space:pre}
 #in{flex:1;background:0;border:0;outline:0;color:inherit;font:inherit;text-shadow:inherit;resize:none;padding:0;height:1.45em;max-height:40vh;caret-color:var(--ph)}
@@ -40,6 +41,7 @@ a{color:inherit}
 <div id="crt">
  <div id="top"><span id="who">BLUESILK</span><span><span id="led">●</span> <span id="link"></span></span><span id="clk"></span></div>
  <div id="out"></div>
+ <div id="ag" hidden></div>
  <div id="st"></div>
  <div id="ln"><span id="ps">bluesilk:~$ </span><textarea id="in" autofocus autocomplete="off" spellcheck="false" rows="1"></textarea></div>
  <input type="file" id="file" multiple hidden>
@@ -106,6 +108,8 @@ function connect(){
  es.addEventListener('history',e=>{for(const[r,t]of JSON.parse(e.data))r==='tool'?line(esc(lastTool=t),'t'):line(r==='user'?esc($('ps').textContent+t):md(t),r==='user'?'u':'')});
  es.addEventListener('msg',e=>type(md(JSON.parse(e.data))));  // the status line was already cleared, or set to what runs on, just before
  es.addEventListener('status',e=>status(JSON.parse(e.data)));
+ es.addEventListener('agents',e=>{const a=JSON.parse(e.data),ag=$('ag');ag.hidden=!a.length;  // the main agent's sub-agents: name, what it does now, its task
+  ag.textContent=a.map(x=>'▸ '+x.name+'  '+(x.doing||'THINKING')+'\n   '+x.task.split('\n')[0].slice(0,100)).join('\n')});
  es.addEventListener('file',e=>{const d=JSON.parse(e.data),i=d.indexOf('/'),name=esc(d.slice(i+1));type(`[FILE] <a href="/file/${d.slice(0,i)}/${name}" target="_blank">${name}</a>`)});
  es.onerror=()=>{$('link').textContent='LINK LOST';if(es.readyState===2){line('LINK CLOSED.','s');start()}else status('LINK LOST, RETRYING')};
  es.onopen=()=>{status('');$('link').textContent='LINK OK'};
