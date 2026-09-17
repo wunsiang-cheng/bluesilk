@@ -60,7 +60,7 @@ class ChromiumIntegrationTests(BluesilkTestCase):
         self.server_thread = threading.Thread(target=self.httpd.serve_forever, daemon=True)
         self.server_thread.start()
         self.url = f"http://127.0.0.1:{self.httpd.server_address[1]}/"
-        self.bs.state.CFG["browser"] = {"viewport": [640, 480]}
+        self.bs.state.CFG["browser"] = {"headless": True, "viewport": [640, 480]}
         self.browser = self.bs.state.BROWSER = self.bs.browser.PlaywrightBrowserBackend()
         self.alice = self.bs.state.Session()
 

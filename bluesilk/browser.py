@@ -1,5 +1,5 @@
 """The browser tool: Playwright Chromium driven from screenshots."""
-import atexit, json, queue, re, threading, time, uuid
+import atexit, json, os, queue, re, threading, time, uuid
 from pathlib import Path
 
 from . import state
@@ -28,7 +28,7 @@ COMPUTER_TOOL = {"type": "function", "function": {
 
 
 class PlaywrightBrowserBackend:
-    """One Playwright thread and Chromium process, with one persistent context (cookies, tabs, downloads)."""
+    """One Playwright thread and Chromium process with a persistent profile (logins, tabs, downloads)."""
 
     def __init__(self):
         self.q, self.ready, self.start_lock = queue.Queue(), threading.Event(), threading.Lock()
@@ -45,7 +45,7 @@ class PlaywrightBrowserBackend:
         if not self.ready.wait(45):
             raise RuntimeError("Chromium did not start within 45 seconds")
         if self.error:
-            raise RuntimeError(f"Chromium could not start: {self.error}. Run `bluesilk browser install`")
+            raise RuntimeError(f"Playwright could not start: {self.error}. Run `bluesilk browser install`")
 
     def submit(self, s, args):
         self.start()
@@ -84,11 +84,6 @@ class PlaywrightBrowserBackend:
             from playwright.sync_api import TimeoutError as PlaywrightTimeout, sync_playwright
             self.PlaywrightTimeout = PlaywrightTimeout
             self.playwright = sync_playwright().start()
-            cfg = CFG.get("browser", {})
-            launch = {"headless": cfg.get("headless", True) is not False}
-            if cfg.get("executable_path"):
-                launch["executable_path"] = str(Path(cfg["executable_path"]).expanduser())
-            self.browser = self.playwright.chromium.launch(**launch)
         except Exception as e:
             self.error = repr(e)
             self.ready.set()
@@ -111,7 +106,6 @@ class PlaywrightBrowserBackend:
         finally:
             for context in list(self.contexts.values()):
                 quiet(context.close)
-            quiet(self.browser.close)
             quiet(self.playwright.stop)
 
     def _dir(self, key):
@@ -138,16 +132,18 @@ class PlaywrightBrowserBackend:
             viewport = cfg.get("viewport", [1280, 720])
             if not (isinstance(viewport, list) and len(viewport) == 2 and all(isinstance(x, int) and x > 0 for x in viewport)):
                 viewport = [1280, 720]
-            storage = root / "storage.json"
-            options = {"viewport": {"width": viewport[0], "height": viewport[1]}, "device_scale_factor": 1,
-                       "accept_downloads": True}
-            if storage.exists():
-                options["storage_state"] = str(storage)
-            context = self.browser.new_context(**options)
+            headed = os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")
+            options = {"headless": cfg.get("headless", not headed) is not False, "accept_downloads": True,
+                       "viewport": {"width": viewport[0], "height": viewport[1]}, "device_scale_factor": 1}
+            if cfg.get("executable_path"):
+                options["executable_path"] = str(Path(cfg["executable_path"]).expanduser())
+            try:  # a full Chromium profile: logins, extensions and cache survive restarts
+                context = self.playwright.chromium.launch_persistent_context(str(root / "profile"), **options)
+            except Exception as e:
+                raise RuntimeError(f"Chromium could not start: {e!r}. Run `bluesilk browser install`") from None
             self.contexts[key] = context
             context.on("page", lambda page, k=key: self._watch(k, page))
-            page = context.new_page()
-            if self.active.get(key) is not page:
+            for page in context.pages:
                 self._watch(key, page)
         return key, self.contexts[key]
 
@@ -233,7 +229,6 @@ class PlaywrightBrowserBackend:
                 page = self.active[key] = pages[int(args["tab"])]
                 page.bring_to_front()
             elif action == "close":
-                context.storage_state(path=str(self._dir(key) / "storage.json"))
                 context.close()
                 self.contexts.pop(key, None)
                 self.active.pop(key, None)
@@ -245,7 +240,6 @@ class PlaywrightBrowserBackend:
         root = self._dir(key)
         shot = root / "screenshots" / f"{int(time.time() * 1000)}-{uuid.uuid4().hex[:6]}.jpg"
         page.screenshot(path=str(shot), type="jpeg", quality=75, full_page=False, timeout=10_000)
-        context.storage_state(path=str(root / "storage.json"))
         old = sorted((root / "screenshots").glob("*.jpg"))[:-20]
         for path in old:
             path.unlink(missing_ok=True)
