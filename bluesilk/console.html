@@ -3,7 +3,8 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>bluesilk</title>
 <style>
-:root{--ph:#3f6;--bg:#070b07;--dim:#1a4d27;--hi:#e6ffe9}
+:root{--ph:#5cf;--bg:#040814;--dim:#163b5e;--hi:#e4f6ff}  /* blue phosphor: the default, it's bluesilk */
+.green{--ph:#3f6;--bg:#070b07;--dim:#1a4d27;--hi:#e6ffe9}
 .amber{--ph:#fb0;--bg:#0f0a00;--dim:#5c4300;--hi:#fff3d0}
 *{box-sizing:border-box}
 html,body{height:100%;margin:0;background:#000}
@@ -88,7 +89,7 @@ const LOGO=[' ___  _     _   _  ___  ___  ___  _     _  __ ',
             '| _ \\| |__ | |_| || _| \\__ \\ | | | |__ | \' <  ',
             '|___/|____| \\___/ |___||___/|___||____||_|\\_\\ '];
 async function boot(){
- try{if(localStorage.amber)document.documentElement.classList.add('amber')}catch{}
+ try{document.documentElement.className=localStorage.theme||(localStorage.amber?'amber':'')}catch{}  // amber: the 0.8 toggle
  const d=line('','logo'),end=LOGO[0].length+6,step=matchMedia('(prefers-reduced-motion:reduce)').matches?end:1;
  for(let t=0;t<=end;t+=step){  // the loom: a rippling bolt of silk settles into the name, one column at a time
   d.textContent=LOGO.map((r,i)=>[...r].map((ch,c)=>c<t-6?ch:' ~-='[(Math.sin(c/2.5-t/1.2+i*1.6)*2+2)|0]).join('')).join('\n');
@@ -140,7 +141,7 @@ inp.onkeydown=pw.onkeydown=async e=>{
   if(nw!==confirm)return line('PASSWORDS DIFFER.','s');
   if((await post('/password',JSON.stringify({old,new:nw}))).ok)line('PASSWORD CHANGED.','s');return}
  if(t==='/logout'){await post('/logout');es?.close();seen=false;out.innerHTML='';return login()}
- if(t==='/theme'){const a=document.documentElement.classList.toggle('amber');try{localStorage.amber=a?1:''}catch{}return}
+ if(t==='/theme'){const h=document.documentElement,n=['','green','amber'],c=n[(n.indexOf(h.className)+1)%3];h.className=c;try{localStorage.theme=c}catch{}return}
  if(t==='/settings')return openCfg(await(await fetch('/settings')).json());
  send('/send',t);
 };

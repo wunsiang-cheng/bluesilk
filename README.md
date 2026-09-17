@@ -69,7 +69,7 @@ The web console listens on `http://127.0.0.1:8321/` by default. Members log in w
 - `/new` starts a new personal conversation.
 - `/reset` resets shared agent data and creates a backup.
 - `/settings` opens configuration.
-- `/theme` switches the color theme.
+- `/theme` cycles the phosphor: blue, green, amber.
 - `/password` changes your password; `/logout` ends the session.
 
 The console uses plain HTTP. Keep it on localhost or a trusted private network, or place it behind a TLS reverse proxy.
