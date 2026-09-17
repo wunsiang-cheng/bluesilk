@@ -19,8 +19,6 @@ body{color:var(--ph);font:15px/1.45 "Cascadia Mono","IBM Plex Mono","Fira Mono",
 b{color:var(--hi)} code,pre.k{color:var(--hi)} pre.k{margin:2px 0;padding:0 0 0 2ch;border-left:2px solid var(--dim);white-space:pre-wrap}
 a{color:inherit}
 #st{opacity:.7;min-height:1.45em;white-space:pre-wrap}
-#st:not(:empty)::after{content:"▮";animation:blink 1s steps(1) infinite}
-@keyframes blink{50%{opacity:0}}
 #ln{display:flex}
 #ps{white-space:pre}
 #in,#pw{flex:1;background:0;border:0;outline:0;color:inherit;font:inherit;text-shadow:inherit;resize:none;padding:0;height:1.45em;max-height:40vh;caret-color:var(--ph)}
@@ -76,8 +74,8 @@ function status(t){  // the line above the prompt: what the agent is doing now a
  if(!t)lastTool='';else if(t!=='…'&&t!==lastTool&&!/^(STOPPING|LINK LOST)|IN BACKGROUND$/.test(t))line(esc(lastTool=t),'t');
  draw();
 }
-function draw(){st.textContent=stText?(stText==='…'?'THINKING':stText)+' '+Math.floor((Date.now()-stSince)/1000)+'s':'';document.title=(stText?'● ':'')+'bluesilk'}
-setInterval(draw,1000);
+function draw(){const ms=Date.now()-stSince;st.textContent=stText?'|/-\\'[Math.floor(ms/125)%4]+' '+(stText==='…'?'THINKING':stText)+' '+Math.floor(ms/1000)+'s':'';document.title=(stText?'● ':'')+'bluesilk'}
+setInterval(draw,125);
 function ask(prompt,secret){  // one answer from the prompt line; a secret one is typed into the password box
  $('ps').textContent=prompt;inp.hidden=!!secret;pw.hidden=!secret;(secret?pw:inp).focus();
  return new Promise(r=>pending=r);
