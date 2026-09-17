@@ -14,9 +14,9 @@ FIXTURE = Path(__file__).with_name("fixtures") / "mcp_server.py"
 
 class StdioMCPTests(BluesilkTestCase):
     def test_stdio_server_handshake_list_and_call(self):
-        server = self.bs.Server("fixture", {"command": sys.executable, "args": [str(FIXTURE)]})
+        server = self.bs.mcp.Server("fixture", {"command": sys.executable, "args": [str(FIXTURE)]})
         self.addCleanup(self.stop_server, server)
-        self.bs.handshake(server)
+        self.bs.mcp.handshake(server)
         self.assertEqual(server.instructions, "fixture")
         tools = server.rpc("tools/list")
         self.assertEqual(tools["tools"][0]["name"], "echo")
@@ -37,23 +37,23 @@ class StdioMCPTests(BluesilkTestCase):
 
     def test_mcp_call_formats_content_and_errors(self):
         server = mock.Mock()
-        self.bs.SERVERS["fixture__echo"] = (server, "echo")
+        self.bs.state.SERVERS["fixture__echo"] = (server, "echo")
         server.rpc.return_value = {
             "content": [{"type": "text", "text": "hello"}, {"type": "image", "data": "ignored"}],
             "isError": True,
         }
-        result = self.bs.mcp_call(None, "fixture__echo", {"value": 1})
+        result = self.bs.mcp.mcp_call(None, "fixture__echo", {"value": 1})
         self.assertEqual(result, "hello\n[image]\n[the tool reported an error]")
         server.rpc.assert_called_once_with("tools/call", name="echo", arguments={"value": 1})
 
     def test_mcp_call_uses_structured_content_fallback(self):
         server = mock.Mock()
         server.rpc.return_value = {"content": [], "structuredContent": {"count": 2}}
-        self.bs.SERVERS["fixture__data"] = (server, "data")
-        self.assertEqual(self.bs.mcp_call(None, "fixture__data", {}), '{"count": 2}')
+        self.bs.state.SERVERS["fixture__data"] = (server, "data")
+        self.assertEqual(self.bs.mcp.mcp_call(None, "fixture__data", {}), '{"count": 2}')
 
     def test_mcp_connect_paginates_and_sanitizes_tool_names(self):
-        self.bs.MCP.write_text(json.dumps({"mcpServers": {"my server": {"command": "ignored"}}}))
+        self.bs.state.MCP.write_text(json.dumps({"mcpServers": {"my server": {"command": "ignored"}}}))
         server = mock.Mock()
         server.name = "my server"
         server.instructions = ""
@@ -61,19 +61,19 @@ class StdioMCPTests(BluesilkTestCase):
             {"tools": [{"name": "first tool", "inputSchema": {"required": ["x"]}}], "nextCursor": "next"},
             {"tools": [{"name": "第二"}]},
         ]
-        with mock.patch.object(self.bs, "Server", return_value=server), \
-             mock.patch.object(self.bs, "handshake"):
-            self.bs.mcp_connect()
-        self.assertIn("my_server__first_tool", self.bs.SERVERS)
-        self.assertIn("my_server____", self.bs.SERVERS)
+        with mock.patch.object(self.bs.mcp, "Server", return_value=server), \
+             mock.patch.object(self.bs.mcp, "handshake"):
+            self.bs.mcp.mcp_connect()
+        self.assertIn("my_server__first_tool", self.bs.state.SERVERS)
+        self.assertIn("my_server____", self.bs.state.SERVERS)
         self.assertEqual(server.rpc.call_args_list[1], mock.call("tools/list", cursor="next"))
 
     def test_mcp_connect_skips_a_failed_server(self):
-        self.bs.MCP.write_text(json.dumps({"mcpServers": {"broken": {"command": "missing"}}}))
-        with mock.patch.object(self.bs, "Server", side_effect=OSError("cannot start")), \
-             mock.patch.object(self.bs, "log") as log:
-            self.bs.mcp_connect()
-        self.assertEqual(self.bs.SERVERS, {})
+        self.bs.state.MCP.write_text(json.dumps({"mcpServers": {"broken": {"command": "missing"}}}))
+        with mock.patch.object(self.bs.mcp, "Server", side_effect=OSError("cannot start")), \
+             mock.patch.object(self.bs.mcp, "log") as log:
+            self.bs.mcp.mcp_connect()
+        self.assertEqual(self.bs.state.SERVERS, {})
         self.assertIn("failed", log.call_args.args[0])
 
 
@@ -104,8 +104,8 @@ class HttpMCPTests(BluesilkTestCase):
             json.dumps({"jsonrpc": "2.0", "id": 1, "result": {"ok": True}}).encode(),
             session="session-1",
         )
-        server = self.bs.HttpServer("remote", {"url": "https://example.test/mcp", "token": "secret"})
-        with mock.patch.object(self.bs, "urlopen", return_value=response) as urlopen:
+        server = self.bs.mcp.HttpServer("remote", {"url": "https://example.test/mcp", "token": "secret"})
+        with mock.patch.object(self.bs.mcp, "urlopen", return_value=response) as urlopen:
             result = server.rpc("test", value=1)
         self.assertEqual(result, {"ok": True})
         self.assertEqual(server.session, "session-1")
@@ -123,16 +123,16 @@ class HttpMCPTests(BluesilkTestCase):
                 b"\n",
             ],
         )
-        server = self.bs.HttpServer("remote", {"url": "https://example.test/mcp"})
-        with mock.patch.object(self.bs, "urlopen", return_value=response):
+        server = self.bs.mcp.HttpServer("remote", {"url": "https://example.test/mcp"})
+        with mock.patch.object(self.bs.mcp, "urlopen", return_value=response):
             self.assertEqual(server.rpc("work"), {"done": True})
 
     def test_http_rpc_reinitializes_an_expired_session(self):
-        server = self.bs.HttpServer("remote", {"url": "https://example.test/mcp"})
+        server = self.bs.mcp.HttpServer("remote", {"url": "https://example.test/mcp"})
         server.session = "expired"
         error = HTTPError(server.url, 404, "gone", {}, io.BytesIO(b"gone"))
         with mock.patch.object(server, "request", side_effect=[error, {"ok": True}]) as request, \
-             mock.patch.object(self.bs, "handshake") as handshake:
+             mock.patch.object(self.bs.mcp, "handshake") as handshake:
             self.assertEqual(server.rpc("work"), {"ok": True})
         self.assertIsNone(server.session)
         handshake.assert_called_once_with(server)

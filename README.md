@@ -2,8 +2,6 @@
 
 A fast, minimal AI agent for individuals and trusted small teams. bluesilk runs on any tool-calling model on OpenRouter and is available through private Telegram chats, a built-in web console, or both.
 
-The core application is a single Python file with no required third-party runtime dependencies.
-
 ## Features
 
 - Separate conversations and work queues for each team member

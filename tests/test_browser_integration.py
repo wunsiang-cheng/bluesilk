@@ -62,14 +62,14 @@ class ChromiumIntegrationTests(BluesilkTestCase):
         self.server_thread = threading.Thread(target=self.httpd.serve_forever, daemon=True)
         self.server_thread.start()
         self.url = f"http://127.0.0.1:{self.httpd.server_address[1]}/"
-        self.bs.CFG["browser"] = {"headless": True, "viewport": [640, 480], "show_cursor": False}
-        self.browser = self.bs.BROWSER = self.bs.PlaywrightBrowserBackend()
-        self.alice = self.bs.Session("alice", "Alice", web=True)
+        self.bs.state.CFG["browser"] = {"headless": True, "viewport": [640, 480], "show_cursor": False}
+        self.browser = self.bs.state.BROWSER = self.bs.browser.PlaywrightBrowserBackend()
+        self.alice = self.bs.state.Session("alice", "Alice", web=True)
 
     def tearDown(self):
-        if self.bs.BROWSER is not None:
-            self.bs.BROWSER.close()
-            self.bs.BROWSER = None
+        if self.bs.state.BROWSER is not None:
+            self.bs.state.BROWSER.close()
+            self.bs.state.BROWSER = None
         self.httpd.shutdown()
         self.httpd.server_close()
         self.server_thread.join(timeout=2)
@@ -111,7 +111,7 @@ class ChromiumIntegrationTests(BluesilkTestCase):
         self.assertEqual(self.details(self.action(action="open", url=self.url))["title"], "remembered")
 
     def test_real_browser_keeps_member_contexts_isolated(self):
-        bob = self.bs.Session("bob", "Bob", web=True)
+        bob = self.bs.state.Session("bob", "Bob", web=True)
         self.action(self.alice, action="open", url=self.url)
         self.assertEqual(self.details(self.action(self.alice, action="click", x=80, y=325))["title"], "remembered")
 

@@ -1,24 +1,22 @@
-import importlib.util
+import importlib
 import os
+import sys
 import tempfile
 import unittest
-import uuid
 from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 
 def load_bluesilk(home):
-    """Load a fresh module whose import-time paths point at an isolated home."""
+    """Import a fresh package whose import-time paths point at an isolated home."""
     old = os.environ.get("BLUESILK_HOME")
     os.environ["BLUESILK_HOME"] = str(home)
+    for name in [n for n in sys.modules if n == "bluesilk" or n.startswith("bluesilk.")]:
+        del sys.modules[name]
     try:
-        name = f"bluesilk_test_{uuid.uuid4().hex}"
-        spec = importlib.util.spec_from_file_location(name, ROOT / "bluesilk.py")
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        return module
+        return importlib.import_module("bluesilk")
     finally:
         if old is None:
             os.environ.pop("BLUESILK_HOME", None)
@@ -31,12 +29,12 @@ class BluesilkTestCase(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.home = Path(self.temp.name) / "home"
         self.bs = load_bluesilk(self.home)
-        self.bs.init_home()
+        self.bs.agent.init_home()
 
     def tearDown(self):
-        if self.bs.BROWSER is not None:
-            self.bs.quiet(self.bs.BROWSER.close)
-        for server, _ in set(self.bs.SERVERS.values()):
+        if self.bs.state.BROWSER is not None:
+            self.bs.state.quiet(self.bs.state.BROWSER.close)
+        for server, _ in set(self.bs.state.SERVERS.values()):
             process = getattr(server, "p", None)
             if process and process.poll() is None:
                 process.kill()
