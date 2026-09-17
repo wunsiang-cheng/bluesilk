@@ -54,7 +54,7 @@ def apply_settings(f):
     """Validate a settings form (blank secrets keep their current value), then write config.json and mcp.json."""
     # ponytail: every change restarts bluesilk, a turn in flight is lost; upgrade: apply api_key live
     new = {"api_key": f.get("api_key") or CFG.get("api_key", ""), "model": (f.get("model") or "").strip() or MODEL}
-    if browser := {k: v for k, v in CFG.get("browser", {}).items() if k in ("enabled", "viewport", "executable_path")}:
+    if browser := {k: v for k, v in CFG.get("browser", {}).items() if k in ("enabled", "headless", "viewport", "executable_path")}:
         new["browser"] = browser  # hand-edited keys survive; the 0.8 visual-mode keys are dropped
     check_key(new["api_key"])
     context, new["vision"] = check_model(new["model"])

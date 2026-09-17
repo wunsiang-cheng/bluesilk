@@ -85,7 +85,7 @@ class PlaywrightBrowserBackend:
             self.PlaywrightTimeout = PlaywrightTimeout
             self.playwright = sync_playwright().start()
             cfg = CFG.get("browser", {})
-            launch = {"headless": True}
+            launch = {"headless": cfg.get("headless", True) is not False}
             if cfg.get("executable_path"):
                 launch["executable_path"] = str(Path(cfg["executable_path"]).expanduser())
             self.browser = self.playwright.chromium.launch(**launch)

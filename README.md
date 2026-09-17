@@ -8,7 +8,7 @@ A minimal personal AI agent. It runs on any tool-calling model on OpenRouter and
 - Memory, reusable skills, custom tools and conversation history
 - Shell access, file transfer, image understanding and background jobs
 - Sub-agents: up to five helpers that report back to the agent, not to you
-- Browser control (headless Chromium) and, on X11, desktop control
+- Browser control (headless or visible Chromium) and, on X11, desktop control
 - Local and remote MCP servers
 - Automatic context compaction and periodic memory maintenance
 
@@ -74,6 +74,8 @@ bluesilk browser install
 ```
 
 Downloads Chromium for the `browser` tool, which drives a headless Chromium from screenshots. Cookies, tabs and downloads persist under `~/.bluesilk/browser/`.
+
+To watch the agent work, and to step in yourself when a page asks for a login or a CAPTCHA, put `"browser": {"headless": false}` in the config: Chromium then opens a window on your display. The agent keeps seeing screenshots and takes over again as soon as you stop.
 
 ## Desktop control
 

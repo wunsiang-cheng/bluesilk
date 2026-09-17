@@ -53,7 +53,7 @@ class SettingsTests(BluesilkTestCase):
             with self.assertRaisesRegex(ValueError, "Telegram, the web console"):
                 self.bs.setup.apply_settings({"api_key": "key", "user_id": "", "port": ""})
             result = self.bs.setup.apply_settings({"api_key": "key", "user_id": "", "port": "8321"})
-        self.assertEqual(result["browser"], {"viewport": [640, 480]})
+        self.assertEqual(result["browser"], {"headless": False, "viewport": [640, 480]})
 
     def test_apply_settings_writes_and_removes_mcp_config(self):
         form = {"api_key": "key", "user_id": "", "port": "8321", "mcp": '{"mcpServers": {}}'}
