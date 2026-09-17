@@ -45,7 +45,7 @@ class AgentLoopTests(BluesilkTestCase):
                          [("one", "first result"), ("two", "sent")])
 
     def test_run_attaches_browser_result_without_logging_image(self):
-        first = {"role": "assistant", "content": None, "tool_calls": [tool_call("visual", "computer", {"action": "observe"})]}
+        first = {"role": "assistant", "content": None, "tool_calls": [tool_call("visual", "browser", {"action": "observe"})]}
         second = {"role": "assistant", "content": "seen"}
         messages = []
         visual = self.bs.tools.ToolResult('{"status":"ok"}', "data:image/jpeg;base64,pixels")

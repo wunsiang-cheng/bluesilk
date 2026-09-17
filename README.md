@@ -83,7 +83,7 @@ uv tool install 'bluesilk[browser]'
 bluesilk browser install
 ```
 
-This adds a `computer` tool that drives a headless Chromium from screenshots. Each member gets an isolated browser context with separate cookies, tabs, and downloads.
+This adds a `browser` tool that drives a headless Chromium from screenshots. Each member gets an isolated browser context with separate cookies, tabs, and downloads.
 
 ## Desktop control
 

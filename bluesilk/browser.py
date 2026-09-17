@@ -1,4 +1,4 @@
-"""The computer tool: Playwright Chromium driven from screenshots."""
+"""The browser tool: Playwright Chromium driven from screenshots."""
 import atexit, importlib.util, json, queue, re, threading, time, uuid
 from pathlib import Path
 
@@ -7,7 +7,7 @@ from .state import CFG, HOME, log, quiet
 from .tools import TOOLS, ToolResult, as_image
 
 COMPUTER_TOOL = {"type": "function", "function": {
-    "name": "computer",
+    "name": "browser",
     "description": "Operate a private Chromium browser from screenshots using mouse and keyboard. Actions except close "
                    "return the current URL, title, viewport size and a new screenshot; choose pixel coordinates from the "
                    "newest screenshot, never DOM selectors. Call it once at a time so you see each result, and observe "
@@ -181,7 +181,7 @@ class PlaywrightBrowserBackend:
     def _action(self, s, args):
         action = args.get("action")
         if action not in COMPUTER_TOOL["function"]["parameters"]["properties"]["action"]["enum"]:
-            raise ValueError(f"unknown computer action: {action!r}")
+            raise ValueError(f"unknown browser action: {action!r}")
         key, context = self._context(s)
         page, note = self._page(key, context), "ok"
         try:
@@ -268,20 +268,20 @@ class PlaywrightBrowserBackend:
 
 
 def init_browser_tool():
-    """Publish computer only when its optional Python dependency is installed."""
+    """Publish browser only when its optional Python dependency is installed."""
     if not CFG.get("browser", {}).get("enabled", True):
         return
     if importlib.util.find_spec("playwright") is None:
         log("browser disabled: install with `uv tool install 'bluesilk[browser]'`, then run `bluesilk browser install`")
         return
-    if not any(t["function"]["name"] == "computer" for t in TOOLS):
+    if not any(t["function"]["name"] == "browser" for t in TOOLS):
         TOOLS.append(COMPUTER_TOOL)
     if state.BROWSER is None:
         state.BROWSER = PlaywrightBrowserBackend()
         atexit.register(state.BROWSER.close)
 
 
-def computer(s, **args):
+def browser(s, **args):
     if state.BROWSER is None:
         raise RuntimeError("browser support is unavailable; install bluesilk[browser] and run `bluesilk browser install`")
     return state.BROWSER.submit(s, args)

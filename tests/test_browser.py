@@ -18,7 +18,7 @@ class BrowserUnitTests(BluesilkTestCase):
     def test_action_rejects_unknown_action_before_starting_context(self):
         browser = self.bs.browser.PlaywrightBrowserBackend()
         with mock.patch.object(browser, "_context") as context:
-            with self.assertRaisesRegex(ValueError, "unknown computer action"):
+            with self.assertRaisesRegex(ValueError, "unknown browser action"):
                 browser._action(self.bs.state.Session("alice", "Alice"), {"action": "launch_missiles"})
         context.assert_not_called()
 
@@ -45,12 +45,12 @@ class BrowserUnitTests(BluesilkTestCase):
              mock.patch.object(self.bs.browser, "log") as log:
             self.bs.browser.init_browser_tool()
         self.assertIsNone(self.bs.state.BROWSER)
-        self.assertFalse(any(t["function"]["name"] == "computer" for t in self.bs.tools.TOOLS))
+        self.assertFalse(any(t["function"]["name"] == "browser" for t in self.bs.tools.TOOLS))
         log.assert_called_once()
 
-    def test_computer_explains_unavailable_browser(self):
+    def test_browser_explains_unavailable_browser(self):
         with self.assertRaisesRegex(RuntimeError, "browser support is unavailable"):
-            self.bs.browser.computer(self.bs.state.Session("alice", "Alice"), action="observe")
+            self.bs.browser.browser(self.bs.state.Session("alice", "Alice"), action="observe")
 
 
 class InputAndPromptTests(BluesilkTestCase):
