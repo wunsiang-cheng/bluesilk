@@ -65,31 +65,19 @@ def write_config():
 
 def settings_view():
     mask = lambda v: v and f"{v[:3]}…{v[-4:]}"
-    web, browser = CFG.get("web", {}), CFG.get("browser", {})
-    visible = not browser.get("headless", True)
+    web = CFG.get("web", {})
     return {"setup": state.SETUP, "api_key": mask(CFG.get("api_key", "")), "bot_token": mask(CFG.get("bot_token", "")),
             "model": CFG.get("model", ""), "default_model": MODEL,
             "user_ids": CFG.get("user_ids", []), "host": web.get("host", "127.0.0.1"), "port": web.get("port", 8321),
-            "members": {n: h is not None for n, h in web.get("members", {}).items()}, "mcp": MCP.read_text() if MCP.exists() else "",
-            "browser_visible": visible, "browser_cursor": browser.get("show_cursor", visible),
-            "browser_slow_mo": browser.get("slow_mo", 0)}
+            "members": {n: h is not None for n, h in web.get("members", {}).items()}, "mcp": MCP.read_text() if MCP.exists() else ""}
 
 
 def apply_settings(f):
     """Validate a settings form (blank secrets keep their current value), then write config.json and mcp.json."""
     # ponytail: every change restarts bluesilk, a turn in flight is lost; upgrade: apply api_key and members live
     new = {"api_key": f.get("api_key") or CFG.get("api_key", ""), "model": (f.get("model") or "").strip() or MODEL}
-    if "browser" in CFG:
-        new["browser"] = CFG["browser"]
-    if any(k in f for k in ("browser_visible", "browser_cursor", "browser_slow_mo")):
-        try:
-            slow_mo = int(f.get("browser_slow_mo") or 0)
-        except (TypeError, ValueError):
-            raise ValueError("browser action delay must be an integer from 0 to 2000") from None
-        if not 0 <= slow_mo <= 2000:
-            raise ValueError("browser action delay must be an integer from 0 to 2000")
-        new["browser"] = {**new.get("browser", {}), "enabled": True, "headless": not bool(f.get("browser_visible")),
-                          "show_cursor": bool(f.get("browser_cursor")), "slow_mo": slow_mo}
+    if browser := {k: v for k, v in CFG.get("browser", {}).items() if k in ("enabled", "viewport", "executable_path")}:
+        new["browser"] = browser  # hand-edited keys survive; the 0.8 visual-mode keys are dropped
     check_key(new["api_key"])
     context, new["vision"] = check_model(new["model"])
     new["compact_at"] = context // 2

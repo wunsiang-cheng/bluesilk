@@ -26,16 +26,6 @@ COMPUTER_TOOL = {"type": "function", "function": {
         "tab": {"type": "integer", "description": "zero-based tab index for switch_tab"}},
         "required": ["action"]}}}
 
-OBSERVER_SCRIPT = r"""({action,x,y})=>{
- const id='__bluesilk_observer__';let host=document.getElementById(id);
- if(!host){host=document.createElement('div');host.id=id;host.style.cssText='position:fixed;inset:0;z-index:2147483647;pointer-events:none';
-  (document.documentElement||document.body).append(host);const root=host.attachShadow({mode:'open'});
-  root.innerHTML=`<style>#label{position:fixed;top:10px;left:50%;transform:translateX(-50%);padding:7px 13px;border-radius:7px;background:#111;color:#fff;font:700 14px/1.2 monospace;box-shadow:0 2px 9px #0008}#cursor{display:none;position:fixed;width:24px;height:24px;margin:-12px;border:3px solid #ff315a;border-radius:50%;box-shadow:0 0 0 2px #fff,0 2px 7px #0008}#cursor:after{content:'';position:absolute;left:8px;top:8px;width:3px;height:3px;border-radius:50%;background:#ff315a}.pulse{animation:pulse .45s ease-out}@keyframes pulse{to{box-shadow:0 0 0 18px #ff315a00,0 2px 7px #0008}}</style><div id=label></div><div id=cursor></div>`}
- const root=host.shadowRoot,label=root.getElementById('label'),cursor=root.getElementById('cursor');
- label.textContent='BLUESILK · '+String(action).toUpperCase().replaceAll('_',' ');
- if(Number.isFinite(x)&&Number.isFinite(y)){cursor.style.display='block';cursor.style.left=x+'px';cursor.style.top=y+'px';
-  cursor.classList.remove('pulse');void cursor.offsetWidth;if(action.includes('click'))cursor.classList.add('pulse')}
-}"""
 
 class PlaywrightBrowserBackend:
     """One Playwright thread and Chromium process, with an isolated context per member."""
@@ -95,11 +85,7 @@ class PlaywrightBrowserBackend:
             self.PlaywrightTimeout = PlaywrightTimeout
             self.playwright = sync_playwright().start()
             cfg = CFG.get("browser", {})
-            self.headless = bool(cfg.get("headless", True))
-            slow_mo = cfg.get("slow_mo", 0)
-            slow_mo = slow_mo if isinstance(slow_mo, int) and 0 <= slow_mo <= 2000 else 0
-            self.show_cursor = bool(cfg.get("show_cursor", not self.headless))
-            launch = {"headless": self.headless, "slow_mo": slow_mo}
+            launch = {"headless": True}
             if cfg.get("executable_path"):
                 launch["executable_path"] = str(Path(cfg["executable_path"]).expanduser())
             self.browser = self.playwright.chromium.launch(**launch)
@@ -192,15 +178,6 @@ class PlaywrightBrowserBackend:
         if missing:
             raise ValueError(f"{args['action']} requires {', '.join(missing)}")
 
-    def _show_action(self, page, action, args, final=False):
-        if not self.show_cursor:
-            return
-        x, y = (args.get("x2"), args.get("y2")) if final and action == "drag" else (args.get("x"), args.get("y"))
-        try:
-            page.evaluate(OBSERVER_SCRIPT, {"action": action, "x": x, "y": y})
-        except Exception:
-            pass  # navigation or a closed popup can replace the document between actions
-
     def _action(self, s, args):
         action = args.get("action")
         if action not in COMPUTER_TOOL["function"]["parameters"]["properties"]["action"]["enum"]:
@@ -208,8 +185,6 @@ class PlaywrightBrowserBackend:
         key, context = self._context(s)
         page, note = self._page(key, context), "ok"
         try:
-            if action not in ("open", "close"):
-                self._show_action(page, action, args)
             if action == "open":
                 self._need(args, "url")
                 if not re.match(r"^https?://", args["url"], re.I):
@@ -269,9 +244,7 @@ class PlaywrightBrowserBackend:
         except self.PlaywrightTimeout:
             note = "timed out; showing the current page"
 
-        acted_page = page
         page = self._page(key, context)  # a click may have opened and focused a popup
-        self._show_action(page, action, args if page is acted_page else {}, final=True)
         root = self._dir(key)
         shot = root / "screenshots" / f"{int(time.time() * 1000)}-{uuid.uuid4().hex[:6]}.jpg"
         page.screenshot(path=str(shot), type="jpeg", quality=75, full_page=False, timeout=10_000)

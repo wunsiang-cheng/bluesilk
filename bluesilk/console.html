@@ -47,9 +47,6 @@ a{color:inherit}
   <label>WEB CONSOLE MEMBERS <span class="s">names, comma-separated; empty = no web console</span></label><input name="members">
   <label>WEB HOST / PORT <span class="s">127.0.0.1 = this machine only; anything else is plain http on your network</span></label>
   <div style="display:flex;gap:8px"><input name="host"><input name="port" style="width:8ch"></div>
-  <label>VISUAL BROWSER <span class="s">visible mode requires a desktop session; delay is 0–2000 ms</span></label>
-  <div><label class="check"><input name="browser_visible" type="checkbox" value="1">SHOW CHROMIUM WINDOW</label><label class="check"><input name="browser_cursor" type="checkbox" value="1">SHOW ACTION CURSOR</label></div>
-  <input name="browser_slow_mo" type="number" min="0" max="2000" step="50" placeholder="action delay in milliseconds">
   <label>PASSWORDS <span class="s">each member picks one on their first login; tick to make them pick again</span></label><div id="mem" class="s"></div>
   <label>MCP.JSON</label><textarea name="mcp" rows="6" spellcheck="false"></textarea>
   <div id="err"></div>
@@ -143,7 +140,6 @@ function openCfg(v){
  cfg.api_key.value=cfg.bot_token.value='';cfg.api_key.placeholder=v.api_key||'';cfg.bot_token.placeholder=v.bot_token||'';
  cfg.model.value=v.model;cfg.model.placeholder=v.default_model;cfg.user_ids.value=v.user_ids.join(', ');cfg.host.value=v.host;cfg.port.value=v.port;
  cfg.members.value=Object.keys(v.members).join(', ');cfg.mcp.value=v.mcp;
- cfg.browser_visible.checked=v.browser_visible;cfg.browser_cursor.checked=v.browser_cursor;cfg.browser_slow_mo.value=v.browser_slow_mo;
  $('mem').innerHTML=Object.entries(v.members).map(([n,set])=>`<label class="check"><input type="checkbox" name="reset" value="${esc(n)}">${esc(n)}: ${set?'SET':'NOT SET'}</label>`).join('')||'(members log in at '+location.origin+' once saved)';
  cfg.api_key.focus();
 }

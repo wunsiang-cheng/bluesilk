@@ -50,14 +50,13 @@ class SettingsTests(BluesilkTestCase):
         self.assertEqual(self.bs.state.CFG["web"], {"host": "127.0.0.1", "port": 8321, "members": {"alice": None}})
         self.assertTrue(self.bs.state.SESSIONS["alice"].web)
 
-    def test_apply_settings_validates_required_channel_and_browser_delay(self):
+    def test_apply_settings_requires_a_channel_and_drops_old_visual_browser_keys(self):
+        self.bs.state.CFG["browser"] = {"headless": False, "show_cursor": True, "slow_mo": 500, "viewport": [640, 480]}
         with mock.patch.object(self.bs.setup, "check_key"), mock.patch.object(self.bs.setup, "check_model", return_value=(1_048_576, True)):
             with self.assertRaisesRegex(ValueError, "Telegram members, web console members"):
                 self.bs.setup.apply_settings({"api_key": "key", "user_ids": "", "members": ""})
-            with self.assertRaisesRegex(ValueError, "0 to 2000"):
-                self.bs.setup.apply_settings({
-                    "api_key": "key", "user_ids": "", "members": "alice", "browser_slow_mo": "2001"
-                })
+            result = self.bs.setup.apply_settings({"api_key": "key", "user_ids": "", "members": "alice"})
+        self.assertEqual(result["browser"], {"viewport": [640, 480]})
 
     def test_apply_settings_writes_and_removes_mcp_config(self):
         form = {"api_key": "key", "user_ids": "", "members": "alice", "mcp": '{"mcpServers": {}}'}

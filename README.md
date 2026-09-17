@@ -83,7 +83,7 @@ uv tool install 'bluesilk[browser]'
 bluesilk browser install
 ```
 
-This adds a visual `computer` tool. Each member gets an isolated browser context with separate cookies, tabs, and downloads. Headless mode is enabled by default; browser visibility, cursor display, and action delay can be changed in `/settings`.
+This adds a `computer` tool that drives a headless Chromium from screenshots. Each member gets an isolated browser context with separate cookies, tabs, and downloads.
 
 ## Desktop control
 
