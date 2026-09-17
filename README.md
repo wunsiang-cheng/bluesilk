@@ -1,6 +1,6 @@
 # bluesilk
 
-A fast, minimal personal AI agent. It runs on any tool-calling model on OpenRouter and is reached through your private Telegram chat, a built-in web console, or both: one conversation, whichever channel you pick up.
+A minimal personal AI agent. It runs on any tool-calling model on OpenRouter and is reached through your private Telegram chat, a built-in web console, or both: one conversation, whichever channel you pick up.
 
 ## Features
 
