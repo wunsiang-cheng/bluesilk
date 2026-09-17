@@ -15,6 +15,7 @@ body{color:var(--ph);font:15px/1.45 "Cascadia Mono","IBM Plex Mono","Fira Mono",
 #out{flex:1;overflow-y:auto;white-space:pre-wrap;overflow-wrap:anywhere;scrollbar-width:none}
 .u{color:var(--hi);text-shadow:0 0 5px var(--hi)}
 .s{opacity:.6}
+.t{opacity:.4}
 b{color:var(--hi)} code,pre.k{color:var(--hi)} pre.k{margin:2px 0;padding:0 0 0 2ch;border-left:2px solid var(--dim);white-space:pre-wrap}
 a{color:inherit}
 #st{opacity:.7;min-height:1.45em;white-space:pre-wrap}
@@ -55,7 +56,7 @@ a{color:inherit}
 </div>
 <script>
 const $=id=>document.getElementById(id),out=$('out'),st=$('st'),inp=$('in'),pw=$('pw'),cfg=$('cfg');
-let es,typing=false,seen=false,pending=null;const tq=[];
+let es,typing=false,seen=false,pending=null,stText='',stSince=0,lastTool='';const tq=[];
 const esc=s=>s.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
 const md=s=>esc(s).replace(/```(?:\w*\n)?([\s\S]*?)```/g,'<pre class="k">$1</pre>').replace(/`([^`\n]+)`/g,'<code>$1</code>')
  .replace(/\*([^*\n]+)\*/g,'<b>$1</b>').replace(/(^|[^\w])_([^_\n]+)_(?=[^\w]|$)/g,'$1<i>$2</i>');
@@ -70,6 +71,13 @@ function next(){  // typewriter: the text nodes are emptied, then refilled a few
  (function tick(){let b=step;while(b>0&&nodes.length){const[nd,s]=nodes[0],k=Math.min(b,s.length-i);nd.data+=s.substr(i,k);i+=k;b-=k;if(i>=s.length){nodes.shift();i=0}}
   out.scrollTop=out.scrollHeight;nodes.length?requestAnimationFrame(tick):next()})();
 }
+function status(t){  // the line above the prompt: what the agent is doing now and for how long; a tool call also stays in the transcript
+ if(t!==stText){stText=t;stSince=Date.now()}
+ if(t&&t!=='…'&&t!==lastTool&&!/^(STOPPING|LINK LOST)/.test(t))line(esc(lastTool=t),'t');
+ draw();
+}
+function draw(){st.textContent=stText?(stText==='…'?'THINKING':stText)+' '+Math.floor((Date.now()-stSince)/1000)+'s':'';document.title=(stText?'● ':'')+'bluesilk'}
+setInterval(draw,1000);
 function ask(prompt,secret){  // one answer from the prompt line; a secret one is typed into the password box
  $('ps').textContent=prompt;inp.hidden=!!secret;pw.hidden=!secret;(secret?pw:inp).focus();
  return new Promise(r=>pending=r);
@@ -102,16 +110,16 @@ function connect(){
  es?.close();es=new EventSource('/events');
  es.addEventListener('hello',e=>{const me=JSON.parse(e.data);if(seen)out.innerHTML='';seen=true;  // a reconnect replays history
   $('ps').textContent=me+'@bluesilk:~$ ';line('LOGGED IN AS '+esc(me)+'. /help FOR COMMANDS.','s');inp.focus()});
- es.addEventListener('history',e=>{for(const[r,t]of JSON.parse(e.data))line(r==='user'?esc($('ps').textContent+t):md(t),r==='user'?'u':'')});
- es.addEventListener('msg',e=>{st.textContent='';type(md(JSON.parse(e.data)))});
- es.addEventListener('status',e=>st.textContent=JSON.parse(e.data));
+ es.addEventListener('history',e=>{for(const[r,t]of JSON.parse(e.data))r==='tool'?line(esc(lastTool=t),'t'):line(r==='user'?esc($('ps').textContent+t):md(t),r==='user'?'u':'')});
+ es.addEventListener('msg',e=>{status('');lastTool='';type(md(JSON.parse(e.data)))});
+ es.addEventListener('status',e=>status(JSON.parse(e.data)));
  es.addEventListener('file',e=>{const d=JSON.parse(e.data),i=d.indexOf('/'),name=esc(d.slice(i+1));type(`[FILE] <a href="/file/${d.slice(0,i)}/${name}" target="_blank">${name}</a>`)});
- es.onerror=()=>{if(es.readyState===2){line('LINK CLOSED.','s');login()}else st.textContent='LINK LOST, RETRYING'};
- es.onopen=()=>st.textContent='';
+ es.onerror=()=>{if(es.readyState===2){line('LINK CLOSED.','s');login()}else status('LINK LOST, RETRYING')};
+ es.onopen=()=>status('');
 }
 async function post(path,body){const r=await fetch(path,{method:'POST',body});if(!r.ok)line(esc(await r.text()),'s');return r}
 inp.onkeydown=pw.onkeydown=async e=>{
- if(e.key==='Escape')return post('/stop');
+ if(e.key==='Escape'){if(stText)status('STOPPING');return post('/stop')}
  if(e.ctrlKey&&e.key==='u'){e.preventDefault();return $('file').click()}
  if(e.key!=='Enter'||e.shiftKey)return;
  e.preventDefault();const el=e.target,t=el.value.trim();el.value='';inp.style.height='';
@@ -125,12 +133,12 @@ inp.onkeydown=pw.onkeydown=async e=>{
  if(t==='/logout'){await post('/logout');es?.close();seen=false;out.innerHTML='';return login()}
  if(t==='/theme'){const a=document.documentElement.classList.toggle('amber');try{localStorage.amber=a?1:''}catch{}return}
  if(t==='/settings')return openCfg(await(await fetch('/settings')).json());
- st.textContent='…';post('/send',t);
+ status('…');post('/send',t);
 };
 inp.oninput=()=>{inp.style.height='';inp.style.height=inp.scrollHeight+'px'};
 document.onmouseup=e=>{if(cfg.hidden&&!e.target.closest('a')&&getSelection().isCollapsed)(pw.hidden?inp:pw).focus()};
 async function upload(f){const cap=inp.value.trim();inp.value='';inp.style.height='';
- line(esc($('ps').textContent+'[sending '+f.name+'] '+cap),'u');st.textContent='…';
+ line(esc($('ps').textContent+'[sending '+f.name+'] '+cap),'u');status('…');
  post('/upload?name='+encodeURIComponent(f.name)+'&text='+encodeURIComponent(cap),f)}
 $('file').onchange=e=>{for(const f of e.target.files)upload(f);e.target.value=''};
 document.ondragover=e=>e.preventDefault();document.ondrop=e=>{e.preventDefault();for(const f of e.dataTransfer.files)upload(f)};

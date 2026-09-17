@@ -6,7 +6,7 @@ from pathlib import Path
 from urllib.parse import parse_qs
 
 from . import state
-from .agent import browser_view, receive
+from .agent import browser_view, receive, tool_label
 from .setup import apply_settings, check_password, hash_password, settings_view, write_config
 from .state import CFG, HOME, SESSIONS, STATE, STATE_FILE, save
 
@@ -14,7 +14,7 @@ from .state import CFG, HOME, SESSIONS, STATE, STATE_FILE, save
 # --- web console
 
 def transcript(s):
-    """The member's conversation as (role, text) pairs, for a page that (re)connects."""
+    """The member's conversation as (role, text) pairs, for a page that (re)connects; role tool is a call the agent made."""
     out = []
     for m in s.messages:
         if browser_view(m):
@@ -24,6 +24,7 @@ def transcript(s):
             c = "\n".join(p.get("text", "[image]") for p in c)
         if m["role"] in ("user", "assistant") and c:
             out.append((m["role"], c))
+        out += [("tool", tool_label(c)) for c in m.get("tool_calls") or []]
     return out
 
 
@@ -149,6 +150,7 @@ class Web(BaseHTTPRequestHandler):
         try:
             self.event("hello", s.name)
             self.event("history", transcript(s))
+            self.event("status", (s.draft_text or "…") if s.draft_id else "")  # a page reloaded mid-turn
             while True:
                 try:
                     self.event(*q.get(timeout=20))

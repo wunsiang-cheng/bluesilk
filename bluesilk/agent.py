@@ -63,12 +63,21 @@ COMPACT = ("The context is getting long. Write a summary that will replace the c
            "key facts and decisions, the state of ongoing tasks, open questions and important file paths. "
            "Dense but complete. Reply with the summary only.")
 
+def tool_label(c):
+    """One line for the status bar and the transcript: an icon and the command or action."""
+    try:
+        args = json.loads(c["function"]["arguments"] or "{}")
+    except ValueError:
+        args = {}
+    name = c["function"]["name"]
+    return ({"computer": "🖱", "desktop": "🖥"}.get(name, "🔧") + f" {args.get('action') or args.get('command') or name}")[:300]
+
+
 def call_tool(s, c):
     try:
         args = json.loads(c["function"]["arguments"] or "{}")
         name = c["function"]["name"]
-        status = {"computer": "🖱", "desktop": "🖥"}.get(name, "🔧") + f" {args.get('action') or args.get('command') or name}"
-        draft(s, status)
+        draft(s, tool_label(c))
         fn = {"shell": shell, "send": send, "computer": computer, "desktop": desktop}.get(name)
         return fn(s, **args) if fn else mcp_call(s, name, args)
     except Exception as e:

@@ -121,8 +121,12 @@ class StorageTests(BluesilkTestCase):
             {"role": "assistant", "content": "hi"},
             {"role": "tool", "content": "tool output"},
             {"role": "user", "content": [{"type": "text", "text": "[browser screenshot]\nx"}]},
+            {"role": "assistant", "content": None, "tool_calls": [
+                {"id": "1", "function": {"name": "shell", "arguments": '{"command": "ls"}'}},
+                {"id": "2", "function": {"name": "computer", "arguments": "{broken"}}]},
         ]
-        self.assertEqual(self.bs.web.transcript(session), [("user", "hello"), ("assistant", "hi")])
+        self.assertEqual(self.bs.web.transcript(session),
+                         [("user", "hello"), ("assistant", "hi"), ("tool", "🔧 ls"), ("tool", "🖱 computer")])
 
     def test_dream_due_requires_idle_sessions_and_elapsed_intervals(self):
         now = 1_000_000
