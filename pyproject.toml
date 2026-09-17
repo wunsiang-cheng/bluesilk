@@ -1,6 +1,6 @@
 [project]
 name = "bluesilk"
-version = "0.7.0"
+version = "0.8.0"
 description = "A fast, minimal AI agent for you or a small team: OpenRouter + Telegram or a web console."
 readme = "README.md"
 requires-python = ">=3.10"

@@ -62,7 +62,7 @@ Create a bot with `@BotFather`. Before setup, each member must start the bot and
 
 ### Web console
 
-The web console listens on `http://127.0.0.1:8321/` by default and creates a private login link for each member.
+The web console listens on `http://127.0.0.1:8321/` by default. Members log in with their name and a password they pick on their first login (first come, first served: tell them as soon as you add them). A member who forgets it is reset from the settings page and picks a new one.
 
 - `Esc` stops the current response.
 - `Ctrl+U`, paste, or drag and drop sends a file.
@@ -70,6 +70,7 @@ The web console listens on `http://127.0.0.1:8321/` by default and creates a pri
 - `/reset` resets shared agent data and creates a backup.
 - `/settings` opens configuration.
 - `/theme` switches the color theme.
+- `/password` changes your password; `/logout` ends the session.
 
 The console uses plain HTTP. Keep it on localhost or a trusted private network, or place it behind a TLS reverse proxy.
 

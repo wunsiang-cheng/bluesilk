@@ -22,7 +22,7 @@ a{color:inherit}
 @keyframes blink{50%{opacity:0}}
 #ln{display:flex}
 #ps{white-space:pre}
-#in{flex:1;background:0;border:0;outline:0;color:inherit;font:inherit;text-shadow:inherit;resize:none;padding:0;height:1.45em;max-height:40vh;caret-color:var(--ph)}
+#in,#pw{flex:1;background:0;border:0;outline:0;color:inherit;font:inherit;text-shadow:inherit;resize:none;padding:0;height:1.45em;max-height:40vh;caret-color:var(--ph)}
 #cfg{position:absolute;inset:0;z-index:1;background:var(--bg);padding:22px 26px;overflow:auto;scrollbar-width:thin;scrollbar-color:var(--dim) transparent}
 #cfg label{display:block;margin:12px 0 3px}
 #cfg input,#cfg textarea{width:100%;background:0;border:1px solid var(--dim);color:inherit;font:inherit;text-shadow:inherit;padding:4px 6px;outline:0}
@@ -36,7 +36,7 @@ a{color:inherit}
 <div id="crt">
  <div id="out"></div>
  <div id="st"></div>
- <div id="ln"><span id="ps">TOKEN&gt; </span><textarea id="in" autofocus autocomplete="off" spellcheck="false" rows="1"></textarea></div>
+ <div id="ln"><span id="ps">LOGIN&gt; </span><textarea id="in" autofocus autocomplete="off" spellcheck="false" rows="1"></textarea><input id="pw" type="password" autocomplete="off" hidden></div>
  <input type="file" id="file" multiple hidden>
  <form id="cfg" hidden>
   <div>== SETTINGS == <span class="s">blank secrets keep their current value; saving restarts bluesilk</span></div>
@@ -50,15 +50,15 @@ a{color:inherit}
   <label>VISUAL BROWSER <span class="s">visible mode requires a desktop session; delay is 0–2000 ms</span></label>
   <div><label class="check"><input name="browser_visible" type="checkbox" value="1">SHOW CHROMIUM WINDOW</label><label class="check"><input name="browser_cursor" type="checkbox" value="1">SHOW ACTION CURSOR</label></div>
   <input name="browser_slow_mo" type="number" min="0" max="2000" step="50" placeholder="action delay in milliseconds">
-  <label>LOGIN LINKS</label><div id="toks" class="s"></div>
+  <label>PASSWORDS <span class="s">each member picks one on their first login; tick to make them pick again</span></label><div id="mem" class="s"></div>
   <label>MCP.JSON</label><textarea name="mcp" rows="6" spellcheck="false"></textarea>
   <div id="err"></div>
   <button type="submit">SAVE &amp; RESTART</button><button type="button" id="cancel">CANCEL</button>
  </form>
 </div>
 <script>
-const $=id=>document.getElementById(id),out=$('out'),st=$('st'),inp=$('in'),cfg=$('cfg');
-let mode='token',es,typing=false,seen=false;const tq=[];
+const $=id=>document.getElementById(id),out=$('out'),st=$('st'),inp=$('in'),pw=$('pw'),cfg=$('cfg');
+let es,typing=false,seen=false,pending=null;const tq=[];
 const esc=s=>s.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
 const md=s=>esc(s).replace(/```(?:\w*\n)?([\s\S]*?)```/g,'<pre class="k">$1</pre>').replace(/`([^`\n]+)`/g,'<code>$1</code>')
  .replace(/\*([^*\n]+)\*/g,'<b>$1</b>').replace(/(^|[^\w])_([^_\n]+)_(?=[^\w]|$)/g,'$1<i>$2</i>');
@@ -73,18 +73,33 @@ function next(){  // typewriter: the text nodes are emptied, then refilled a few
  (function tick(){let b=step;while(b>0&&nodes.length){const[nd,s]=nodes[0],k=Math.min(b,s.length-i);nd.data+=s.substr(i,k);i+=k;b-=k;if(i>=s.length){nodes.shift();i=0}}
   out.scrollTop=out.scrollHeight;nodes.length?requestAnimationFrame(tick):next()})();
 }
-function cookie(t){document.cookie='t='+t+';path=/;SameSite=Strict;max-age=31536000'}
+function ask(prompt,secret){  // one answer from the prompt line; a secret one is typed into the password box
+ $('ps').textContent=prompt;inp.hidden=!!secret;pw.hidden=!secret;(secret?pw:inp).focus();
+ return new Promise(r=>pending=r);
+}
 async function boot(){
  try{if(localStorage.amber)document.documentElement.classList.add('amber')}catch{}
  for(const l of['BLUESILK CONSOLE','MEM CHECK ........ OK','LINK ............. '+location.host]){line(l,'s');await sleep(160)}
- if(location.hash.length>1){cookie(location.hash.slice(1));history.replaceState(null,'',location.pathname)}
  login();
 }
 async function login(){
  let r;try{r=await fetch('/settings')}catch{return setTimeout(login,1500)}  // restarting: try again
- if(r.status===401){mode='token';$('ps').textContent='TOKEN> ';line('ENTER YOUR TOKEN (or open your login link).','s');return inp.focus()}
- const v=await r.json();mode='chat';
+ if(r.status===401)return signin();
+ const v=await r.json();
  v.setup?openCfg(v):connect();
+}
+async function signin(){
+ const name=await ask('LOGIN> '),password=await ask('PASSWORD> ',true);
+ let r=await post('/login',JSON.stringify({name,password}));
+ if(!r.ok)return signin();
+ if((await r.json()).confirm){  // first login: the password just typed becomes theirs once confirmed
+  line('NEW MEMBER: THAT PASSWORD WILL BE YOURS. TYPE IT AGAIN.','s');
+  const confirm=await ask('CONFIRM> ',true);
+  r=await post('/login',JSON.stringify({name,password,confirm}));
+  if(!r.ok)return signin();
+  if((await r.json()).confirm){line('PASSWORDS DIFFER.','s');return signin()}
+ }
+ login();
 }
 function connect(){
  es?.close();es=new EventSource('/events');
@@ -98,20 +113,25 @@ function connect(){
  es.onopen=()=>st.textContent='';
 }
 async function post(path,body){const r=await fetch(path,{method:'POST',body});if(!r.ok)line(esc(await r.text()),'s');return r}
-inp.onkeydown=async e=>{
+inp.onkeydown=pw.onkeydown=async e=>{
  if(e.key==='Escape')return post('/stop');
  if(e.ctrlKey&&e.key==='u'){e.preventDefault();return $('file').click()}
  if(e.key!=='Enter'||e.shiftKey)return;
- e.preventDefault();const t=inp.value.trim();inp.value='';inp.style.height='';if(!t)return;
- if(mode==='token'){cookie(t);return login()}
+ e.preventDefault();const el=e.target,t=el.value.trim();el.value='';inp.style.height='';
+ if(pending){const r=pending;pending=null;if(el===inp)line(esc($('ps').textContent+t),'u');inp.hidden=false;pw.hidden=true;inp.focus();return r(t)}
+ if(!t)return;
  line(esc($('ps').textContent+t),'u');
- if(t==='/help')return line('/new  /reset  /settings  /theme  /help    Esc = stop    Ctrl+U, paste or drop = send a file','s');
+ if(t==='/help')return line('/new  /reset  /settings  /theme  /password  /logout  /help    Esc = stop    Ctrl+U, paste or drop = send a file','s');
+ if(t==='/password'){const old=await ask('CURRENT PASSWORD> ',true),nw=await ask('NEW PASSWORD> ',true),confirm=await ask('CONFIRM> ',true);
+  if(nw!==confirm)return line('PASSWORDS DIFFER.','s');
+  if((await post('/password',JSON.stringify({old,new:nw}))).ok)line('PASSWORD CHANGED.','s');return}
+ if(t==='/logout'){await post('/logout');es?.close();seen=false;out.innerHTML='';return login()}
  if(t==='/theme'){const a=document.documentElement.classList.toggle('amber');try{localStorage.amber=a?1:''}catch{}return}
  if(t==='/settings')return openCfg(await(await fetch('/settings')).json());
  st.textContent='…';post('/send',t);
 };
 inp.oninput=()=>{inp.style.height='';inp.style.height=inp.scrollHeight+'px'};
-document.onmouseup=e=>{if(cfg.hidden&&!e.target.closest('a')&&getSelection().isCollapsed)inp.focus()};
+document.onmouseup=e=>{if(cfg.hidden&&!e.target.closest('a')&&getSelection().isCollapsed)(pw.hidden?inp:pw).focus()};
 async function upload(f){const cap=inp.value.trim();inp.value='';inp.style.height='';
  line(esc($('ps').textContent+'[sending '+f.name+'] '+cap),'u');st.textContent='…';
  post('/upload?name='+encodeURIComponent(f.name)+'&text='+encodeURIComponent(cap),f)}
@@ -122,20 +142,20 @@ function openCfg(v){
  cfg.hidden=false;$('cancel').hidden=!!v.setup;$('err').textContent='';
  cfg.api_key.value=cfg.bot_token.value='';cfg.api_key.placeholder=v.api_key||'';cfg.bot_token.placeholder=v.bot_token||'';
  cfg.model.value=v.model;cfg.model.placeholder=v.default_model;cfg.user_ids.value=v.user_ids.join(', ');cfg.host.value=v.host;cfg.port.value=v.port;
- cfg.members.value=Object.values(v.tokens).join(', ');cfg.mcp.value=v.mcp;
+ cfg.members.value=Object.keys(v.members).join(', ');cfg.mcp.value=v.mcp;
  cfg.browser_visible.checked=v.browser_visible;cfg.browser_cursor.checked=v.browser_cursor;cfg.browser_slow_mo.value=v.browser_slow_mo;
- $('toks').innerHTML=Object.entries(v.tokens).map(([t,n])=>`${esc(n)}: <a href="/#${t}">${location.origin}/#${t}</a>`).join('<br>')||'(members get theirs when saved)';
+ $('mem').innerHTML=Object.entries(v.members).map(([n,set])=>`<label class="check"><input type="checkbox" name="reset" value="${esc(n)}">${esc(n)}: ${set?'SET':'NOT SET'}</label>`).join('')||'(members log in at '+location.origin+' once saved)';
  cfg.api_key.focus();
 }
 $('cancel').onclick=()=>{cfg.hidden=true;inp.focus()};
 cfg.onsubmit=async e=>{
  e.preventDefault();$('err').textContent='VALIDATING…';
- const r=await fetch('/settings',{method:'POST',body:JSON.stringify(Object.fromEntries(new FormData(cfg)))});
+ const f=Object.fromEntries(new FormData(cfg));f.reset=[...cfg.querySelectorAll('[name=reset]:checked')].map(x=>x.value).join(' ');
+ const r=await fetch('/settings',{method:'POST',body:JSON.stringify(f)});
  if(!r.ok)return $('err').textContent=await r.text();
  const v=await r.json();cfg.hidden=true;es?.close();
  line('SAVED. RESTARTING…','s');
- for(const[t,n]of Object.entries(v.tokens))line(`${esc(n)}: ${location.origin}/#${t}`);
- if(v.setup)line('OPEN YOUR LOGIN LINK ABOVE, OR PASTE THE TOKEN AT THE PROMPT.','s');
+ line('MEMBERS LOG IN AT '+location.origin+' WITH THEIR NAME. A NEW MEMBER PICKS A PASSWORD ON THE FIRST LOGIN.','s');
  setTimeout(login,2000);
 };
 boot();
