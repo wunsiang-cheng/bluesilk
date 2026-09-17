@@ -22,7 +22,8 @@ body{color:var(--ph);font:15px/1.45 "Cascadia Mono","IBM Plex Mono","Fira Mono",
 .t{opacity:.4}
 b{color:var(--hi)} code,pre.k{color:var(--hi)} pre.k{margin:2px 0;padding:0 0 0 2ch;border-left:2px solid var(--dim);white-space:pre-wrap}
 a{color:inherit}
-#top{display:flex;justify-content:space-between;gap:1ch;opacity:.7;border-bottom:1px solid var(--dim);padding-bottom:5px;margin-bottom:8px;white-space:pre}
+#top{display:flex;justify-content:space-between;gap:1ch;background:var(--ph);color:var(--bg);text-shadow:none;padding:2px 1ch;margin-bottom:8px;white-space:pre}  /* reverse video, like a real status line */
+#led{color:var(--dim)}#led.on{color:var(--hi);text-shadow:0 0 6px var(--hi)}
 #st{opacity:.7;min-height:1.45em;white-space:pre-wrap;border-top:1px solid var(--dim);padding-top:5px;margin-top:8px}
 #ln{display:flex}
 #ps{white-space:pre}
@@ -38,7 +39,7 @@ a{color:inherit}
 @media(max-width:600px){#crt,#cfg{padding:12px 14px;border-radius:0}}
 </style>
 <div id="crt">
- <div id="top"><span id="who">BLUESILK</span><span id="link"></span><span id="clk"></span></div>
+ <div id="top"><span id="who">BLUESILK</span><span><span id="led">●</span> <span id="link"></span></span><span id="clk"></span></div>
  <div id="out"></div>
  <div id="st"></div>
  <div id="ln"><span id="ps">LOGIN&gt; </span><textarea id="in" autofocus autocomplete="off" spellcheck="false" rows="1"></textarea><input id="pw" type="password" autocomplete="off" hidden></div>
@@ -83,6 +84,8 @@ function status(t){  // the line above the prompt: what the agent is doing now a
 function draw(){const ms=Date.now()-stSince;st.textContent=stText?'|/-\\'[Math.floor(ms/125)%4]+' '+(stText==='…'?'THINKING':stText)+' '+Math.floor(ms/1000)+'s':'';document.title=(stText?'● ':'')+'bluesilk';
  $('clk').textContent=new Date().toTimeString().slice(0,8)}
 setInterval(draw,125);
+(function blink(){  // the link LED flickers at its own irregular pace, like a modem's
+ $('led').classList.toggle('on',$('link').textContent==='LINK OK'&&Math.random()<.6);setTimeout(blink,60+Math.random()*600)})();
 function ask(prompt,secret){  // one answer from the prompt line; a secret one is typed into the password box
  $('ps').textContent=prompt;inp.hidden=!!secret;pw.hidden=!secret;(secret?pw:inp).focus();
  return new Promise(r=>pending=r);
