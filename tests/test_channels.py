@@ -162,7 +162,9 @@ class WebTests(BluesilkTestCase):
         super().setUp()
         self.session = self.bs.state.Session("alice", "Alice", web=True)
         self.bs.state.SESSIONS["alice"] = self.session
-        self.bs.state.TOKENS["good-token"] = "alice"
+        self.bs.state.CFG["web"] = {"host": "127.0.0.1", "port": 8321,
+                                    "members": {"alice": self.bs.setup.hash_password("alice-pw1"), "bob": None}}
+        self.bs.state.STATE["logins"] = {"good-sid": "alice", "phone-sid": "alice"}
         self.httpd = self.bs.app.ThreadingHTTPServer(("127.0.0.1", 0), self.bs.web.Web)
         self.thread = threading.Thread(target=self.httpd.serve_forever, daemon=True)
         self.thread.start()
@@ -173,11 +175,11 @@ class WebTests(BluesilkTestCase):
         self.thread.join(timeout=2)
         super().tearDown()
 
-    def request(self, method, path, body=b"", token=None, headers=None):
-        connection = HTTPConnection("127.0.0.1", self.httpd.server_address[1], timeout=2)
+    def request(self, method, path, body=b"", sid=None, headers=None):
+        connection = HTTPConnection("127.0.0.1", self.httpd.server_address[1], timeout=5)
         request_headers = dict(headers or {})
-        if token is not None:
-            request_headers["Cookie"] = f"t={token}"
+        if sid is not None:
+            request_headers["Cookie"] = f"s={sid}"
         connection.request(method, path, body=body, headers=request_headers)
         response = connection.getresponse()
         result = response.status, dict(response.getheaders()), response.read()
@@ -189,17 +191,65 @@ class WebTests(BluesilkTestCase):
         self.assertEqual(status, 200)
         self.assertIn(b"BLUESILK CONSOLE", body)
         self.assertEqual(self.request("GET", "/settings")[0], 401)
-        self.assertEqual(self.request("GET", "/settings", token="good-token")[0], 200)
+        self.assertEqual(self.request("GET", "/settings", sid="good-sid")[0], 200)
+
+    def login(self, **form):
+        return self.request("POST", "/login", json.dumps(form).encode())
+
+    def sid_of(self, headers):
+        return headers["Set-Cookie"].split(";")[0].removeprefix("s=")
+
+    def test_login_rejects_unknown_names_and_wrong_passwords_slowly(self):
+        with mock.patch.object(self.bs.web.time, "sleep") as sleep:
+            self.assertEqual(self.login(name="mallory", password="alice-pw1")[0], 401)
+            self.assertEqual(self.login(name="alice", password="alice-pw2")[0], 401)
+        self.assertEqual(sleep.call_count, 2)
+        self.assertEqual(self.bs.state.STATE["logins"], {"good-sid": "alice", "phone-sid": "alice"})
+
+    def test_login_issues_a_cookie_that_survives_in_state(self):
+        status, headers, body = self.login(name="alice", password="alice-pw1")
+        self.assertEqual((status, json.loads(body)), (200, {"name": "alice"}))
+        self.assertIn("HttpOnly", headers["Set-Cookie"])
+        sid = self.sid_of(headers)
+        self.assertEqual(self.request("GET", "/settings", sid=sid)[0], 200)
+        self.assertEqual(json.loads(self.bs.state.STATE_FILE.read_text())["logins"][sid], "alice")
+
+    def test_first_login_sets_the_password_after_a_confirmation(self):
+        self.assertEqual(self.login(name="bob", password="short")[0], 400)
+        status, _, body = self.login(name="bob", password="bob-pw-11")
+        self.assertEqual((status, json.loads(body)), (200, {"confirm": True}))
+        self.assertIsNone(self.bs.state.CFG["web"]["members"]["bob"])  # nothing set yet
+        status, headers, _ = self.login(name="bob", password="bob-pw-11", confirm="bob-pw-11")
+        self.assertEqual(status, 200)
+        self.assertTrue(self.bs.setup.check_password("bob-pw-11", json.loads(self.bs.state.CONFIG.read_text())["web"]["members"]["bob"]))
+        self.assertEqual(self.bs.state.STATE["logins"][self.sid_of(headers)], "bob")
+        with mock.patch.object(self.bs.web.time, "sleep"):
+            self.assertEqual(self.login(name="bob", password="bob-pw-11")[0], 200)  # second login: a plain password check
+            self.assertEqual(self.login(name="bob", password="bob-pw-12")[0], 401)
+
+    def test_password_change_logs_out_other_devices(self):
+        change = lambda old, new: self.request("POST", "/password", json.dumps({"old": old, "new": new}).encode(), "good-sid")[0]
+        self.assertEqual(change("wrong", "alice-pw2"), 401)
+        self.assertEqual(change("alice-pw1", "short"), 400)
+        self.assertEqual(change("alice-pw1", "alice-pw2"), 200)
+        self.assertEqual(self.bs.state.STATE["logins"], {"good-sid": "alice"})
+        self.assertTrue(self.bs.setup.check_password("alice-pw2", self.bs.state.CFG["web"]["members"]["alice"]))
+
+    def test_logout_drops_the_cookie(self):
+        status, headers, _ = self.request("POST", "/logout", sid="good-sid")
+        self.assertEqual((status, headers["Set-Cookie"]), (200, "s=; Path=/; Max-Age=0"))
+        self.assertEqual(self.request("GET", "/settings", sid="good-sid")[0], 401)
+        self.assertEqual(self.bs.state.STATE["logins"], {"phone-sid": "alice"})
 
     def test_send_and_stop_endpoints_target_authenticated_session(self):
-        self.assertEqual(self.request("POST", "/send", b"hello", "good-token")[0], 200)
+        self.assertEqual(self.request("POST", "/send", b"hello", "good-sid")[0], 200)
         self.assertEqual(self.session.q.get_nowait()["text"], "hello")
         self.assertFalse(self.session.stop.is_set())
-        self.assertEqual(self.request("POST", "/stop", token="good-token")[0], 200)
+        self.assertEqual(self.request("POST", "/stop", sid="good-sid")[0], 200)
         self.assertTrue(self.session.stop.is_set())
 
     def test_upload_strips_path_and_queues_saved_file(self):
-        status, _, _ = self.request("POST", "/upload?name=../../note.txt&text=caption", b"contents", "good-token")
+        status, _, _ = self.request("POST", "/upload?name=../../note.txt&text=caption", b"contents", "good-sid")
         self.assertEqual(status, 200)
         message = self.session.q.get_nowait()
         path = message["local"][0]
@@ -211,10 +261,10 @@ class WebTests(BluesilkTestCase):
         file = self.home / "report.txt"
         file.write_text("report")
         self.session.files["allowed"] = file
-        status, headers, body = self.request("GET", "/file/allowed/report.txt", token="good-token")
+        status, headers, body = self.request("GET", "/file/allowed/report.txt", sid="good-sid")
         self.assertEqual((status, body), (200, b"report"))
         self.assertIn("report.txt", headers["Content-Disposition"])
-        self.assertEqual(self.request("GET", "/file/missing/report.txt", token="good-token")[0], 404)
+        self.assertEqual(self.request("GET", "/file/missing/report.txt", sid="good-sid")[0], 404)
 
 
 if __name__ == "__main__":

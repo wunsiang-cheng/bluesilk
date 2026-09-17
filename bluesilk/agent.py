@@ -235,8 +235,9 @@ def reset(s):
         if p not in (CONFIG, MCP):  # mcp.json is configuration, like the keys, not memory
             p.rename(backup / p.name)  # moved, not deleted: a mis-tap is recoverable
     init_home()
+    logins = STATE.get("logins", {})
     STATE.clear()
-    STATE.update(last_dream=time.time(), history_offset=0)
+    STATE.update(last_dream=time.time(), history_offset=0, logins=logins)  # the web members stay logged in
     save(STATE_FILE, STATE)
     for x in SESSIONS.values():
         x.summary = ""

@@ -22,7 +22,6 @@ MCP = HOME / "mcp.json"  # {"mcpServers": {"<name>": {"command": ..., "args": [.
 CFG, STATE = {}, {}  # STATE: the dream's bookkeeping; conversations live in sessions/<member>.json
 SESSIONS = {}  # Telegram user id or web member name -> Session, one per team member
 SERVERS = {}  # tool name -> (Server, its name on that server)
-TOKENS = {}  # web login token -> member name
 SETUP = False  # serving the web console only to finish setup
 HISTORY_LOCK = threading.Lock()
 LAST = {"active": time.time()}
