@@ -73,7 +73,7 @@ function next(){  // typewriter: the text nodes are emptied, then refilled a few
 }
 function status(t){  // the line above the prompt: what the agent is doing now and for how long; a tool call also stays in the transcript
  if(t!==stText){stText=t;stSince=Date.now()}
- if(t&&t!=='…'&&t!==lastTool&&!/^(STOPPING|LINK LOST)/.test(t))line(esc(lastTool=t),'t');
+ if(!t)lastTool='';else if(t!=='…'&&t!==lastTool&&!/^(STOPPING|LINK LOST)|IN BACKGROUND$/.test(t))line(esc(lastTool=t),'t');
  draw();
 }
 function draw(){st.textContent=stText?(stText==='…'?'THINKING':stText)+' '+Math.floor((Date.now()-stSince)/1000)+'s':'';document.title=(stText?'● ':'')+'bluesilk'}
@@ -111,7 +111,7 @@ function connect(){
  es.addEventListener('hello',e=>{const me=JSON.parse(e.data);if(seen)out.innerHTML='';seen=true;  // a reconnect replays history
   $('ps').textContent=me+'@bluesilk:~$ ';line('LOGGED IN AS '+esc(me)+'. /help FOR COMMANDS.','s');inp.focus()});
  es.addEventListener('history',e=>{for(const[r,t]of JSON.parse(e.data))r==='tool'?line(esc(lastTool=t),'t'):line(r==='user'?esc($('ps').textContent+t):md(t),r==='user'?'u':'')});
- es.addEventListener('msg',e=>{status('');lastTool='';type(md(JSON.parse(e.data)))});
+ es.addEventListener('msg',e=>type(md(JSON.parse(e.data))));  // the status line was already cleared, or set to what runs on, just before
  es.addEventListener('status',e=>status(JSON.parse(e.data)));
  es.addEventListener('file',e=>{const d=JSON.parse(e.data),i=d.indexOf('/'),name=esc(d.slice(i+1));type(`[FILE] <a href="/file/${d.slice(0,i)}/${name}" target="_blank">${name}</a>`)});
  es.onerror=()=>{if(es.readyState===2){line('LINK CLOSED.','s');login()}else status('LINK LOST, RETRYING')};
@@ -133,13 +133,17 @@ inp.onkeydown=pw.onkeydown=async e=>{
  if(t==='/logout'){await post('/logout');es?.close();seen=false;out.innerHTML='';return login()}
  if(t==='/theme'){const a=document.documentElement.classList.toggle('amber');try{localStorage.amber=a?1:''}catch{}return}
  if(t==='/settings')return openCfg(await(await fetch('/settings')).json());
- status('…');post('/send',t);
+ send('/send',t);
 };
+async function send(path,body){  // a message sent during a turn waits its turn; the status line keeps showing the running one
+ const r=await post(path,body);if(!r.ok)return;const q=(await r.json()).queued;
+ q?line('QUEUED'+(q>1?', '+(q-1)+' AHEAD':''),'s'):status('…');
+}
 inp.oninput=()=>{inp.style.height='';inp.style.height=inp.scrollHeight+'px'};
 document.onmouseup=e=>{if(cfg.hidden&&!e.target.closest('a')&&getSelection().isCollapsed)(pw.hidden?inp:pw).focus()};
 async function upload(f){const cap=inp.value.trim();inp.value='';inp.style.height='';
- line(esc($('ps').textContent+'[sending '+f.name+'] '+cap),'u');status('…');
- post('/upload?name='+encodeURIComponent(f.name)+'&text='+encodeURIComponent(cap),f)}
+ line(esc($('ps').textContent+'[sending '+f.name+'] '+cap),'u');
+ send('/upload?name='+encodeURIComponent(f.name)+'&text='+encodeURIComponent(cap),f)}
 $('file').onchange=e=>{for(const f of e.target.files)upload(f);e.target.value=''};
 document.ondragover=e=>e.preventDefault();document.ondrop=e=>{e.preventDefault();for(const f of e.dataTransfer.files)upload(f)};
 inp.onpaste=e=>{for(const f of e.clipboardData.files)upload(f)};

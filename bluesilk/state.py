@@ -37,12 +37,19 @@ class Session:
         self.q, self.stop = queue.Queue(), threading.Event()  # q: the member's messages and background command results
         self.busy = False
         self.draft_id, self.draft_text, self.tokens = 0, "", 0
+        self.note, self.jobs = "", 0  # note: what the session is doing between turns (compacting); jobs: background commands
         self.summary, self.messages = "", []
         self.web, self.subs, self.files = web, [], {}  # web: a queue per open browser tab; files: id -> path the agent sent
 
     def push(self, kind, text):
         for q in list(self.subs):
             q.put((kind, text))
+
+    def status(self):
+        """The console's status line: the running turn, else what keeps the agent busy in the background."""
+        if self.draft_id:
+            return self.draft_text or "…"
+        return self.note or DREAM.note or (f"{self.jobs} JOB{'S' * (self.jobs > 1)} IN BACKGROUND" if self.jobs else "")
 
 
 DREAM = Session(0, "nobody: this is the periodic background reflection")  # uid 0: not recorded, send reaches everyone

@@ -57,13 +57,17 @@ def draft(s, text=None):
     if text is not None:
         s.draft_text = text[:300]
     if s.web:
-        s.push("status", (s.draft_text or "…") if s.draft_id else "")
+        s.push("status", s.status())
     elif s.draft_id:
         quiet(tg, "sendMessageDraft", chat_id=s.uid, draft_id=s.draft_id, text=s.draft_text, can_stop=True)
+
+
+def pulse():
+    for s in SESSIONS.values():
+        draft(s)
 
 
 def heartbeat():
     while True:  # drafts vanish after 30s
         time.sleep(20)
-        for s in SESSIONS.values():
-            draft(s)
+        pulse()

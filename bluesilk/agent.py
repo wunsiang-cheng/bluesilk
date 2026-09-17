@@ -10,7 +10,7 @@ from .llm import chat
 from .mcp import mcp_call, mcp_connect
 from .state import (CFG, COMPACT_AT, CONFIG, DREAM, DREAM_EVERY, DREAM_IDLE, HISTORY, HISTORY_LOCK, HOME, LAST, MCP, SERVERS,
                     SESSIONS, STATE, STATE_FILE, Session, log, quiet, save)
-from .telegram import download, draft, send_text, tg
+from .telegram import download, draft, pulse, send_text, tg
 from .tools import ToolResult, as_image, send, shell
 
 IMAGE_BUDGET = 20 * 2**20  # base64 chars of images kept in context; the API caps a request at 48 MiB
@@ -191,8 +191,14 @@ def chat_turn(s, content, draft_id):
 
 def compact(s):
     log(f"compacting {s.uid} at", s.tokens, "tokens")
-    s.summary = chat(s, s.messages + [{"role": "user", "content": COMPACT}], tool_choice="none")["content"]
-    s.messages = [{"role": "system", "content": system_prompt(s)}]
+    s.note = f"COMPACTING {s.tokens // 1000}K TOKENS"
+    draft(s)
+    try:
+        s.summary = chat(s, s.messages + [{"role": "user", "content": COMPACT}], tool_choice="none")["content"]
+        s.messages = [{"role": "system", "content": system_prompt(s)}]
+    finally:
+        s.note = ""
+        draft(s)
 
 
 def dream():
@@ -201,10 +207,16 @@ def dream():
     if size > start:
         log("dreaming over", size - start, "bytes")
         DREAM.stop.clear()
-        run(DREAM, [{"role": "system", "content": system_prompt(DREAM)},
-                    {"role": "user", "content": f"Periodic reflection: follow skills/reflect.md. New history is bytes {start}-{size}: "
-                                                f"`tail -c +{start + 1} {HISTORY} | head -c {size - start}`. Your final reply "
-                                                "here is NOT delivered; only send reaches the team."}])
+        DREAM.note = "DREAMING"
+        pulse()
+        try:
+            run(DREAM, [{"role": "system", "content": system_prompt(DREAM)},
+                        {"role": "user", "content": f"Periodic reflection: follow skills/reflect.md. New history is bytes {start}-{size}: "
+                                                    f"`tail -c +{start + 1} {HISTORY} | head -c {size - start}`. Your final reply "
+                                                    "here is NOT delivered; only send reaches the team."}])
+        finally:
+            DREAM.note = ""
+            pulse()
         if DREAM.stop.is_set():  # interrupted by /reset, which already started history over
             return
         for s in SESSIONS.values():  # everyone picks up the new memory, skills and tools

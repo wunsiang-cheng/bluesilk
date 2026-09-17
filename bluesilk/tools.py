@@ -41,6 +41,7 @@ def shell(s, command, timeout=SHELL_TIMEOUT):
     start = time.time()
     while (note := ended(p, start, int(timeout), s.stop)) is None:
         if s.uid and time.time() - start > FOREGROUND:  # the dream has nobody to report back to, so it waits
+            s.jobs += 1
             threading.Thread(target=background, args=(s, p, out, start, int(timeout), command), daemon=True).start()
             return (f"[still running after {FOREGROUND}s, moved to the background (process group {p.pid}, output: {out}). "
                     "End your turn now and tell the user it's running. Don't sleep, poll or read the log: the result "
@@ -67,6 +68,7 @@ def background(s, p, out, start, timeout, command):
     never = threading.Event()
     while (note := ended(p, start, timeout, never)) is None:
         pass
+    s.jobs -= 1
     s.q.put(f"[background command finished: {command}]\n[full output: {out}]\n"
             + clip(f"exit {p.returncode}\n{out.read_text(errors='replace')}{note}"))
 

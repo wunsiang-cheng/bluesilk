@@ -118,11 +118,13 @@ class Web(BaseHTTPRequestHandler):
                 return self.reply("unauthorized", code=401)
             if path == "/send":
                 receive(s, {"message_id": int(time.time()), "text": body.decode()})
+                return self.reply({"queued": s.q.qsize() if s.busy else 0}, "application/json")  # behind a running turn
             elif path == "/upload":
                 q = parse_qs(query)
                 dest = HOME / "inbox" / f"{int(time.time())}_{Path(q.get('name', ['file'])[0]).name}"
                 dest.write_bytes(body)
                 receive(s, {"message_id": int(time.time()), "text": q.get("text", [""])[0], "local": [dest]})
+                return self.reply({"queued": s.q.qsize() if s.busy else 0}, "application/json")
             elif path == "/stop":
                 s.stop.set()
             elif path == "/logout":
@@ -150,7 +152,7 @@ class Web(BaseHTTPRequestHandler):
         try:
             self.event("hello", s.name)
             self.event("history", transcript(s))
-            self.event("status", (s.draft_text or "…") if s.draft_id else "")  # a page reloaded mid-turn
+            self.event("status", s.status())  # a page reloaded mid-turn
             while True:
                 try:
                     self.event(*q.get(timeout=20))

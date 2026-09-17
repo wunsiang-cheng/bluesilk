@@ -113,6 +113,20 @@ class StorageTests(BluesilkTestCase):
         self.assertEqual(messages[0]["content"][0]["type"], "text")
         self.assertEqual(messages[1]["content"][0]["type"], "image_url")
 
+    def test_session_status_shows_the_turn_else_background_work(self):
+        s = self.bs.state.Session("alice", "Alice", web=True)
+        self.assertEqual(s.status(), "")
+        s.jobs = 2
+        self.assertEqual(s.status(), "2 JOBS IN BACKGROUND")
+        self.bs.state.DREAM.note = "DREAMING"
+        self.assertEqual(s.status(), "DREAMING")
+        s.note = "COMPACTING 5K TOKENS"
+        self.assertEqual(s.status(), "COMPACTING 5K TOKENS")
+        s.draft_id, s.draft_text = 7, ""
+        self.assertEqual(s.status(), "…")
+        s.draft_text = "🔧 ls"
+        self.assertEqual(s.status(), "🔧 ls")
+
     def test_transcript_filters_internal_and_browser_messages(self):
         session = self.bs.state.Session("alice", "Alice", web=True)
         session.messages = [
