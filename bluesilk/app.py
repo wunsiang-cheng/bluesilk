@@ -1,5 +1,5 @@
 """Entry points: the Telegram poll loop, serve, and main."""
-import importlib.util, json, subprocess, sys, threading, time
+import importlib.util, subprocess, sys, threading, time
 from http.server import ThreadingHTTPServer
 
 from . import state
@@ -62,8 +62,8 @@ def main():
     try:
         if sys.argv[1:] == ["browser", "install"]:
             return install_browser()
-        if sys.argv[1:2] == ["setup"] or not CONFIG.exists() or "model" not in json.loads(CONFIG.read_text()):
-            setup()  # no model: a config from before 0.7.0, whose key was for DeepSeek
+        if not CONFIG.exists():  # to start over: delete it, or use /settings in the console
+            setup()
         serve()
     except (KeyboardInterrupt, EOFError):
         print()

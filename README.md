@@ -31,10 +31,9 @@ bluesilk                        # first start runs the interactive setup
 | Command | Does |
 |---|---|
 | `bluesilk` | Start the agent (runs setup first if there is no config) |
-| `bluesilk setup` | Run setup again |
 | `bluesilk browser install` | Download Chromium for browser control |
 
-Setup needs Telegram, the web console, or both. Everything lives in `~/.bluesilk/`; set `BLUESILK_HOME` to move it. Settings can also be changed from the web console with `/settings`.
+Setup needs Telegram, the web console, or both. Everything lives in `~/.bluesilk/`; set `BLUESILK_HOME` to move it. To change settings later, use `/settings` in the web console, or delete `~/.bluesilk/config.json` and start again.
 
 ### Model
 

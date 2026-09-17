@@ -93,7 +93,7 @@ def ask(prompt, check, secret=False):
 def setup():
     if CONFIG.exists():
         CFG.update(json.loads(CONFIG.read_text()))
-    print("bluesilk setup: an OpenRouter key and model, then Telegram and/or the web console\n")
+    print("bluesilk: an OpenRouter key and model, then Telegram and/or the web console\n")
     f = {"api_key": ask("OpenRouter API key (openrouter.ai/keys)", check_key, secret=True)}
     print("  ✓ OpenRouter key works")
 
