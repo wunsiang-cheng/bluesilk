@@ -188,7 +188,7 @@ class WebTests(BluesilkTestCase):
     def test_root_is_public_but_settings_require_authentication(self):
         status, headers, body = self.request("GET", "/")
         self.assertEqual(status, 200)
-        self.assertIn(b"BLUESILK CONSOLE", body)
+        self.assertIn(b"const LOGO=", body)
         self.assertEqual(self.request("GET", "/settings")[0], 401)
         self.assertEqual(self.request("GET", "/settings", sid="good-sid")[0], 200)
 

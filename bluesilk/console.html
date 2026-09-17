@@ -12,6 +12,9 @@ body{color:var(--ph);font:15px/1.45 "Cascadia Mono","IBM Plex Mono","Fira Mono",
 #crt::before{content:"";position:absolute;inset:0;z-index:2;pointer-events:none;background:repeating-linear-gradient(0deg,rgba(0,0,0,.3) 0 1px,transparent 1px 3px)}
 #crt::after{content:"";position:absolute;inset:0;z-index:2;pointer-events:none;background:radial-gradient(ellipse at center,transparent 55%,rgba(0,0,0,.65));animation:flicker 6s infinite}
 @keyframes flicker{0%,100%{opacity:1}93%{opacity:1}94%{opacity:.7}95%{opacity:1}}
+@media(prefers-reduced-motion:no-preference){#crt{animation:poweron .8s ease-out}}
+@keyframes poweron{from{transform:scaleY(.004) scaleX(1.4);filter:brightness(6)}45%{transform:scaleY(1) scaleX(1.02);filter:brightness(2.5)}to{transform:none;filter:none}}
+.logo{color:var(--hi);text-shadow:0 0 5px var(--hi);font-size:clamp(7px,2.2vw,15px);line-height:1.15;margin-bottom:.8em}
 #out{flex:1;overflow-y:auto;white-space:pre-wrap;overflow-wrap:anywhere;scrollbar-width:none}
 .u{color:var(--hi);text-shadow:0 0 5px var(--hi)}
 .s{opacity:.6}
@@ -80,9 +83,17 @@ function ask(prompt,secret){  // one answer from the prompt line; a secret one i
  $('ps').textContent=prompt;inp.hidden=!!secret;pw.hidden=!secret;(secret?pw:inp).focus();
  return new Promise(r=>pending=r);
 }
+const LOGO=[' ___  _     _   _  ___  ___  ___  _     _  __ ',
+            '| _ )| |   | | | || __|/ __||_ _|| |   | |/ / ',
+            '| _ \\| |__ | |_| || _| \\__ \\ | | | |__ | \' <  ',
+            '|___/|____| \\___/ |___||___/|___||____||_|\\_\\ '];
 async function boot(){
  try{if(localStorage.amber)document.documentElement.classList.add('amber')}catch{}
- for(const l of['BLUESILK CONSOLE','MEM CHECK ........ OK','LINK ............. '+location.host]){line(l,'s');await sleep(160)}
+ const d=line('','logo'),end=LOGO[0].length+6,step=matchMedia('(prefers-reduced-motion:reduce)').matches?end:1;
+ for(let t=0;t<=end;t+=step){  // the loom: a rippling bolt of silk settles into the name, one column at a time
+  d.textContent=LOGO.map((r,i)=>[...r].map((ch,c)=>c<t-6?ch:' ~-='[(Math.sin(c/2.5-t/1.2+i*1.6)*2+2)|0]).join('')).join('\n');
+  await sleep(30)}
+ for(const l of['MEM CHECK ........ OK','LINK ............. '+location.host]){line(l,'s');await sleep(160)}
  login();
 }
 async function login(){
